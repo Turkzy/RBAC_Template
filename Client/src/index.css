@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html.dark {
+    color-scheme: dark;
+}
+
+/* Global browser scrollbar styling */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: #10b981 #f3f4f6;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track {
+  background: #f3f4f6;
+}
+
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb {
+  background: #10b981;
+  border-radius: 9999px;
+}
+
+html::-webkit-scrollbar-thumb:hover,
+body::-webkit-scrollbar-thumb:hover {
+  background: #059669;
+}
+
+.scrollbar-green {
+  scrollbar-width: thin;
+  scrollbar-color: #10b981 #f3f4f6;
+}
+
+.scrollbar-green::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.scrollbar-green::-webkit-scrollbar-track {
+  background: #f3f4f6;
+}
+
+.scrollbar-green::-webkit-scrollbar-thumb {
+  background: #10b981;
+  border-radius: 9999px;
+}
+
+.scrollbar-green::-webkit-scrollbar-thumb:hover {
+  background: #059669;
+}
