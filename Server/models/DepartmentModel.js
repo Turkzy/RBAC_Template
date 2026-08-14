@@ -10,7 +10,15 @@ const Department = database.define("Department", {
     departmentName: {
         type: DataTypes.STRING,
         allowNull: false,
-    }
+    },
+    workgroupId: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+            model: "Workgroups",
+            key: "id",
+        },
+    },
 });
 
 export default Department;

@@ -200,7 +200,7 @@ const PermissionChecklist = ({ permissions, selectedIds, onToggle }) => {
   );
 };
 
-const Pagination = ({ currentPage, totalPages, onPageChange }) => {
+const Pagination = ({ currentPage, totalPages, onPageChange, inFooter = false }) => {
   const [goToPageInput, setGoToPageInput] = useState("");
 
   const handleGoToPage = () => {
@@ -248,11 +248,15 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
   const pageNumbers = getPageNumbers();
 
   return (
-    <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center sm:justify-end gap-2 sm:gap-3 mt-3 sm:mt-4 font-montserrat text-xs sm:text-sm">
+    <div
+      className={`flex flex-row flex-nowrap items-center justify-end gap-1 sm:gap-2 lg:gap-3 font-montserrat text-xs sm:text-sm overflow-x-auto scrollbar-green ${
+        inFooter ? "" : "mt-3 sm:mt-4"
+      }`}
+    >
       <button
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
-        className="p-2 text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+        className="p-2 text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition"
         aria-label="Previous page"
       >
         <ChevronLeft className="w-4 h-4" />
@@ -261,17 +265,17 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
       <div className="flex items-center gap-1">
         {pageNumbers.map((p, idx) =>
           p === "ellipsis" ? (
-            <span key={`ellipsis-${idx}`} className="px-2 text-gray-500">
+            <span key={`ellipsis-${idx}`} className="px-2 text-gray-500 dark:text-slate-400">
               ...
             </span>
           ) : (
             <button
               key={p}
               onClick={() => onPageChange(p)}
-              className={`min-w-[32px] h-8 px-2 rounded-md text-sm font-medium transition ${
+              className={`min-w-[28px] sm:min-w-[32px] h-7 sm:h-8 px-1.5 sm:px-2 rounded-md text-xs sm:text-sm font-medium transition ${
                 p === currentPage
                   ? "bg-emerald-500 text-white shadow-md hover:bg-emerald-600"
-                  : "text-gray-600 hover:bg-gray-100"
+                  : "text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700"
               }`}
             >
               {p}
@@ -283,14 +287,14 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
       <button
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage === totalPages}
-        className="p-2 text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+        className="p-2 text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition"
         aria-label="Next page"
       >
         <ChevronRight className="w-4 h-4" />
       </button>
 
-      <div className="flex items-center gap-2 ml-4 pl-4 border-l border-gray-200">
-        <span className="text-sm text-gray-500">Go to page</span>
+      <div className="flex items-center gap-1 sm:gap-2 ml-2 sm:ml-4 pl-2 sm:pl-4 border-l border-gray-200 dark:border-slate-700 whitespace-nowrap shrink-0">
+        <span className="text-[10px] sm:text-sm text-gray-500 dark:text-slate-400">Go to page</span>
         <input
           type="number"
           min={1}
@@ -299,11 +303,11 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
           onChange={(e) => setGoToPageInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleGoToPage()}
           placeholder=""
-          className="w-14 px-2 py-1.5 text-sm border border-gray-300 rounded focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-transparent"
+          className="w-11 sm:w-14 px-1.5 sm:px-2 py-1 text-[11px] sm:text-sm border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-transparent"
         />
         <button
           onClick={handleGoToPage}
-          className="px-3 py-1.5 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition"
+          className="px-2 sm:px-3 py-1 text-[11px] sm:text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600 transition"
         >
           Go
         </button>
@@ -639,6 +643,7 @@ const AccessSettingPage = () => {
   const [permissionSearch, setPermissionSearch] = useState("");
   const PAGE_SIZE = 10;
   const [page, setPage] = useState(1);
+  const [rolePage, setRolePage] = useState(1);
 
   const filteredPermissions = permissions.filter((permission) => {
     const search = permissionSearch.trim().toLowerCase();
@@ -668,8 +673,19 @@ const AccessSettingPage = () => {
     page * PAGE_SIZE,
   );
 
+  const totalRolePages = Math.max(1, Math.ceil(roles.length / PAGE_SIZE));
+
+  useEffect(() => {
+    if (rolePage > totalRolePages) setRolePage(totalRolePages);
+  }, [totalRolePages, rolePage]);
+
+  const paginatedRoles = roles.slice(
+    (rolePage - 1) * PAGE_SIZE,
+    rolePage * PAGE_SIZE,
+  );
+
   return (
-    <div className="rounded-lg p-6 select-none">
+    <div className="rounded-lg select-none">
       {/* Page header */}
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -773,92 +789,117 @@ const AccessSettingPage = () => {
                     Search and manage permission rules.
                   </p>
                 </div>
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
                   <div className="relative w-full sm:w-80">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
                     <input
                       type="text"
                       value={permissionSearch}
                       onChange={(e) => setPermissionSearch(e.target.value)}
                       placeholder="Search permissions..."
-                      className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 pl-10 pr-3 py-2 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition"
+                      className="w-full rounded-md border border-slate-200 bg-white pl-10 pr-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
                     />
                   </div>
                   {hasPermission(PERMISSIONS.PERMISSIONS_CREATE) && (
                     <button
                       onClick={openAddPerm}
-                      className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition shadow-sm"
+                      className="flex w-full items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition shadow-sm sm:w-auto"
                     >
                       <Plus size={15} /> Add Permission
                     </button>
                   )}
                 </div>
               </div>
-              <div className="overflow-x-auto scrollbar-green">
-                <table className="min-w-full text-sm bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-                  <thead>
-                    <tr className="bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
-                      <th className="px-5 py-3 text-left">#</th>
-                      <th className="px-5 py-3 text-left">Label</th>
-                      <th className="px-5 py-3 text-left">Permission Key</th>
-                      <th className="px-5 py-3 text-center">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {permissions.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={4}
-                          className="text-center py-12 text-slate-400 dark:text-slate-500"
-                        >
-                          No permissions found.
-                        </td>
+              <div className="rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto scrollbar-green">
+                  <table className="min-w-full text-sm bg-white dark:bg-slate-900">
+                    <thead>
+                      <tr className="bg-slate-50 dark:bg-slate-950/20 text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
+                        <th className="px-5 py-3 text-left whitespace-nowrap">#</th>
+                        <th className="px-5 py-3 text-left whitespace-nowrap">Label</th>
+                        <th className="px-5 py-3 text-left whitespace-nowrap">Permission Key</th>
+                        <th className="px-5 py-3 text-center whitespace-nowrap">Actions</th>
                       </tr>
-                    ) : (
-                      paginatedPermissions.map((p, i) => (
-                        <tr
-                          key={p.id}
-                          className="hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
-                        >
-                          <td className="px-5 py-3.5 text-slate-400 dark:text-slate-500 tabular-nums">
-                            {(page - 1) * PAGE_SIZE + i + 1}
-                          </td>
-                          <td className="px-5 py-3.5 font-medium text-slate-700 dark:text-slate-200 whitespace-normal break-words sm:whitespace-nowrap">
-                            <span className="inline-flex items-center gap-1.5">
-                              <KeyRound
-                                size={13}
-                                className="text-emerald-500"
-                              />
-                              {p.label}
-                            </span>
-                          </td>
-                          <td className="px-5 py-3.5 whitespace-normal break-words sm:whitespace-nowrap">
-                            <span className="px-2 py-0.5 font-mono text-xs rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 break-all">
-                              {p.name}
-                            </span>
-                          </td>
-                          <td className="px-5 py-3.5 text-center">
-                            <button
-                              onClick={(e) => toggleMenu("permission", p.id, e)}
-                              className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition"
-                            >
-                              <EllipsisVertical
-                                size={15}
-                                className="text-slate-400 dark:text-slate-500"
-                              />
-                            </button>
+                    </thead>
+                    <tbody className="bg-white dark:bg-slate-800/40 divide-y divide-slate-200 dark:divide-slate-700">
+                      {filteredPermissions.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={4}
+                            className="text-center py-12 text-slate-400 dark:text-slate-500"
+                          >
+                            No permissions found.
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                      ) : (
+                        paginatedPermissions.map((p, i) => {
+                          return (
+                            <tr
+                              key={p.id}
+                              className="hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
+                            >
+                              <td className="px-5 py-3.5 text-xs sm:text-sm text-slate-400 dark:text-slate-500 tabular-nums whitespace-nowrap align-top">
+                                {(page - 1) * PAGE_SIZE + i + 1}
+                              </td>
+                              <td className="px-5 py-3.5 text-xs sm:text-sm font-medium text-slate-700 dark:text-slate-200 align-top">
+                                <span className="inline-flex items-center gap-1.5 whitespace-nowrap overflow-hidden overflow-ellipsis">
+                                  <KeyRound
+                                    size={13}
+                                    className="text-emerald-500 flex-shrink-0"
+                                  />
+                                  <span className="truncate">{p.label}</span>
+                                </span>
+                              </td>
+                              <td className="px-5 py-3.5 text-xs sm:text-sm align-top">
+                                <span className="inline-block px-2 py-0.5 font-mono text-xs rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 whitespace-nowrap overflow-hidden text-ellipsis max-w-[200px]">
+                                  {p.name}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3.5 text-center whitespace-nowrap align-top">
+                                <button
+                                  type="button"
+                                  onClick={(e) => toggleMenu("permission", p.id, e)}
+                                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:text-slate-500 dark:hover:bg-slate-700 transition"
+                                  aria-label="Open actions"
+                                >
+                                  <EllipsisVertical
+                                    size={15}
+                                    className="pointer-events-none"
+                                  />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                    <tfoot className="border-t border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-950/30">
+                      <tr>
+                        <td colSpan={4} className="px-5 py-3">
+                          <div className="flex flex-row items-center justify-between gap-3">
+                            <div className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                              {filteredPermissions.length === 0 ? (
+                                <span>Showing 0 of 0 permissions</span>
+                              ) : (
+                                <span>
+                                  Showing {(page - 1) * PAGE_SIZE + 1}-
+                                  {Math.min(page * PAGE_SIZE, filteredPermissions.length)} of {filteredPermissions.length} permissions
+                                </span>
+                              )}
+                            </div>
+                            <Pagination
+                              currentPage={page}
+                              totalPages={totalPages}
+                              onPageChange={setPage}
+                              inFooter={true}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
               </div>
-              <Pagination
-                currentPage={page}
-                totalPages={totalPages}
-                onPageChange={setPage}
-              />
             </div>
           )}
 
@@ -878,17 +919,18 @@ const AccessSettingPage = () => {
                   </button>
                 )}
               </div>
-              <div className="overflow-x-auto scrollbar-green">
-                <table className="min-w-full text-sm bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-                  <thead>
-                    <tr className="bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
-                      <th className="px-5 py-3 text-left">#</th>
-                      <th className="px-5 py-3 text-left">Role Name</th>
-                      <th className="px-5 py-3 text-left">Permissions COUNT</th>
-                      <th className="px-5 py-3 text-center">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              <div className="rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto scrollbar-green">
+                  <table className="min-w-full text-sm bg-white dark:bg-slate-900">
+                    <thead>
+                      <tr className="bg-slate-50 dark:bg-slate-950/20 text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
+                        <th className="px-5 py-3 text-left whitespace-nowrap">#</th>
+                        <th className="px-5 py-3 text-left whitespace-nowrap">Role Name</th>
+                        <th className="px-5 py-3 text-left whitespace-nowrap">Permissions COUNT</th>
+                        <th className="px-5 py-3 text-center whitespace-nowrap">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white dark:bg-slate-800/40 divide-y divide-slate-200 dark:divide-slate-700">
                     {roles.length === 0 ? (
                       <tr>
                         <td
@@ -899,24 +941,24 @@ const AccessSettingPage = () => {
                         </td>
                       </tr>
                     ) : (
-                      roles.map((r, i) => (
+                      paginatedRoles.map((r, i) => (
                         <tr
                           key={r.id}
                           className="hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
                         >
-                          <td className="px-5 py-3.5 text-slate-400 dark:text-slate-500 tabular-nums">
-                            {i + 1}
+                          <td className="px-5 py-3.5 text-xs sm:text-sm text-slate-400 dark:text-slate-500 tabular-nums whitespace-nowrap align-top">
+                            {(rolePage - 1) * PAGE_SIZE + i + 1}
                           </td>
-                          <td className="px-5 py-3.5 font-semibold text-slate-700 dark:text-slate-200 whitespace-normal break-words sm:whitespace-nowrap">
-                            <span className="inline-flex items-center gap-1.5">
+                          <td className="px-5 py-3.5 text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-200 align-top">
+                            <span className="inline-flex items-center gap-1.5 min-w-0 max-w-full whitespace-nowrap overflow-hidden">
                               <ShieldCheck
                                 size={14}
-                                className="text-blue-500"
+                                className="text-blue-500 flex-shrink-0"
                               />
-                              {r.name}
+                              <span className="truncate">{r.name}</span>
                             </span>
                           </td>
-                          <td className="px-5 py-3.5 whitespace-normal break-words sm:whitespace-nowrap">
+                          <td className="px-5 py-3.5 text-xs sm:text-sm whitespace-normal break-words sm:whitespace-nowrap align-top">
                             <span
                               title={
                                 r.Permissions.length > 0
@@ -936,14 +978,16 @@ const AccessSettingPage = () => {
                                 : "Permissions"}
                             </span>
                           </td>
-                          <td className="px-5 py-3.5 text-center">
+                          <td className="px-5 py-3.5 text-center whitespace-nowrap align-top">
                             <button
+                              type="button"
                               onClick={(e) => toggleMenu("role", r.id, e)}
-                              className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition"
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:text-slate-500 dark:hover:bg-slate-700 transition"
+                              aria-label="Open actions"
                             >
                               <EllipsisVertical
                                 size={15}
-                                className="text-slate-400 dark:text-slate-500"
+                                className="pointer-events-none"
                               />
                             </button>
                           </td>
@@ -951,7 +995,32 @@ const AccessSettingPage = () => {
                       ))
                     )}
                   </tbody>
+                  <tfoot className="border-t border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-950/30">
+                    <tr>
+                      <td colSpan={4} className="px-5 py-3">
+                        <div className="flex flex-row items-center justify-between gap-3">
+                          <div className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                            {roles.length === 0 ? (
+                              <span>Showing 0 of 0 roles</span>
+                            ) : (
+                              <span>
+                                Showing {(rolePage - 1) * PAGE_SIZE + 1}-
+                                {Math.min(rolePage * PAGE_SIZE, roles.length)} of {roles.length} roles
+                              </span>
+                            )}
+                          </div>
+                          <Pagination
+                            currentPage={rolePage}
+                            totalPages={totalRolePages}
+                            onPageChange={setRolePage}
+                            inFooter={true}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  </tfoot>
                 </table>
+                </div>
               </div>
             </div>
           )}

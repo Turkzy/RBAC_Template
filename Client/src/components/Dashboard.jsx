@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect } from "react";
+import api, { endpoints } from "../config/api.js";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import Sidebar, { SidebarItem } from "./Sidebar.jsx";
 import Header from "./Header.jsx";
@@ -9,18 +10,28 @@ import {
   Bell,
   CalendarFold,
   FileCog,
-  Files,
   ChevronDown,
   Shield,
   Users,
   Logs,
   SlidersHorizontal,
+  BellDot,
+  Building2,
+  FileStack,
+  FileChartPie,
+  FileInput,
+  Folders,
+  Archive,
 } from "lucide-react";
 import { PERMISSIONS } from "../utils/permissions.js";
 import { useAuth } from "../context/AuthContext.jsx";
+import useComplianceNotificationStream from "../hooks/useComplianceNotificationStream.js";
 
 const Dashboard = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [pendingApprovalCount, setPendingApprovalCount] = useState(0);
+  const [revisionCount, setRevisionCount] = useState(0);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const { user, authStatus, hasPermission } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -31,12 +42,70 @@ const Dashboard = () => {
   };
 
   useLayoutEffect(() => {
-    if (window.innerWidth < 640) {
+    if (window.innerWidth < 768) {
       setIsSidebarCollapsed(true);
     }
   }, []);
 
+  const fetchPendingApprovalCount = async () => {
+    try {
+      const currentUserId = Number(user?.id || 0);
+      const [allResp, unreadResp] = await Promise.all([
+        api.get(endpoints.compliance.list),
+        api.get(endpoints.compliance.list, {
+          params: {
+            unread: true,
+            from: new Date().toISOString(),
+          },
+        }),
+      ]);
+
+      const items = allResp?.data?.items || [];
+      const unreadItems = unreadResp?.data?.items || [];
+
+      const pendingItems = (items || []).filter(
+        (item) =>
+          String(item?.submissionStatus || "Pending Review") === "Pending Review" &&
+          Array.isArray(item.fileUrls) &&
+          item.fileUrls.length > 0,
+      );
+      setPendingApprovalCount(pendingItems.length);
+
+      const revisionItems = (items || []).filter(
+        (item) =>
+          String(item?.submissionStatus || "Pending Review") === "Rejected" &&
+          Number(item?.submittedBy) === currentUserId,
+      );
+      setRevisionCount(revisionItems.length);
+      setUnreadNotificationCount(unreadItems.length);
+    } catch (error) {
+      console.error("Failed to fetch pending approval count:", error);
+      setPendingApprovalCount(0);
+      setRevisionCount(0);
+      setUnreadNotificationCount(0);
+    }
+  };
+
+  useEffect(() => {
+    if (!user) {
+      setPendingApprovalCount(0);
+      return;
+    }
+
+    fetchPendingApprovalCount();
+  }, [user]);
+
+  useComplianceNotificationStream(() => {
+    fetchPendingApprovalCount();
+  }, Boolean(user) && authStatus !== "checking");
+
   const adminItems = [
+        {
+      permissions: [PERMISSIONS.ORGANIZATION_MANAGE],
+      text: "Organization",
+      icon: <Building2 className="w-4 h-4" />,
+      path: "/admin/organization",
+    },
     {
       permissions: [PERMISSIONS.ROLES_MANAGE, PERMISSIONS.PERMISSIONS_MANAGE],
       text: "Access Settings",
@@ -49,11 +118,25 @@ const Dashboard = () => {
       icon: <Users className="w-4 h-4" />,
       path: "/admin/account",
     },
+    {
+      permissions: [PERMISSIONS.NOTIFICATIONS_RULES_MANAGE],
+      text: "Notification Rules",
+      icon: <BellDot className="w-4 h-4" />,
+      path: "/admin/notification-rules",
+    }
   ];
 
   const visibleAdminItems = adminItems.filter((item) =>
     isSuperAdmin() || item.permissions.some((perm) => hasPermission(perm)),
   );
+
+  const canManageDocuments = isSuperAdmin() || hasPermission(PERMISSIONS.DOCUMENTS_MANAGE);
+  const canSubmitDocuments = isSuperAdmin() || hasPermission(PERMISSIONS.SUBMIT_DOCUMENTS);
+  const canAccessDocumentsMenu = canManageDocuments || canSubmitDocuments;
+  const canManageCompliance = isSuperAdmin() || hasPermission(PERMISSIONS.COMPLIANCE_MANAGE);
+  const documentsBadgeCount =
+    (canManageDocuments ? pendingApprovalCount : 0) +
+    (canSubmitDocuments ? revisionCount : 0);
 
   const canAccessAdminTool = isSuperAdmin() || visibleAdminItems.length > 0;
 
@@ -88,7 +171,7 @@ const Dashboard = () => {
 
     const cleanPath = (p) => p.replace(/\/$/, ""); // remove trailing slash
 
-    const current = cleanPath(location.pathname);
+    const current = cleanPath(location.pathname + location.hash);
     const target = cleanPath(path.startsWith("/") ? path : "/" + path);
 
     return current === target || current.startsWith(target + "/");
@@ -125,28 +208,77 @@ const Dashboard = () => {
         <SidebarItem
           icon={<FileChartColumnIncreasing className="w-5 h-5" />}
           text="Compliance"
-          active={isActive("compliance")}
-          onClick={() => handleNavigate("/compliance")}
-        />
+          active={isActive("compliance") || isActive("compliance/manage") || isActive("compliance/status")}
+          expandable={true}
+          itemId="compliance"
+          dropdownIcon={<ChevronDown className="w-4 h-4" />}
+        >
+          {canManageCompliance && (
+            <SidebarItem
+              icon={<FileCog className="w-4 h-4" />}
+              text="Manage Compliance"
+              active={isActive("compliance/manage")}
+              onClick={() => handleNavigate("/compliance/manage")}
+            />
+          )}
+          <SidebarItem
+            icon={<FileChartPie className="w-4 h-4" />}
+            text="Compliance Status"
+            active={isActive("compliance/status")}
+            onClick={() => handleNavigate("/compliance/status")}
+          />
+        </SidebarItem>
+        {canAccessDocumentsMenu && (
+          <SidebarItem
+            icon={<Folders className="w-5 h-5" />}
+            text="Documents"
+            active={isActive("documentmanagement") || isActive("submitted-documents")}
+            notification={documentsBadgeCount > 0}
+            notificationCount={0}
+            notificationColor="bg-red-500"
+            notificationSide="upper-right"
+            expandable={true}
+            itemId="documents"
+            dropdownIcon={<ChevronDown className="w-4 h-4" />}
+          >
+            {canManageDocuments && (
+              <SidebarItem
+                icon={<FileStack className="w-4 h-4" />}
+                text="Document Management"
+                active={isActive("documentmanagement")}
+                onClick={() => handleNavigate("/documentmanagement")}
+                notification={pendingApprovalCount > 0}
+                notificationCount={pendingApprovalCount}
+                notificationColor="bg-red-500"
+              />
+            )}
+            {canSubmitDocuments && (
+              <SidebarItem
+                icon={<FileInput className="w-4 h-4" />}
+                text="Submitted Documents"
+                active={isActive("submitted-documents")}
+                onClick={() => handleNavigate("/submitted-documents")}
+                notification={revisionCount > 0}
+                notificationCount={revisionCount}
+                notificationColor="bg-red-500"
+              />
+            )}
+          </SidebarItem>
+        )}
         <SidebarItem
           icon={<CalendarFold className="w-5 h-5" />}
           text="Calendar"
           active={isActive("calendar")}
           onClick={() => handleNavigate("/calendar")}
         />
-        {hasPermission(PERMISSIONS.DOCUMENTS_MANAGE) && (
-          <SidebarItem
-            icon={<Files className="w-5 h-5" />}
-            text="Document Management"
-            active={isActive("documentmanagement")}
-            onClick={() => handleNavigate("/documentmanagement")}
-          />
-        )}
         <SidebarItem
           icon={<Bell className="w-5 h-5" />}
           text="Notification"
           active={isActive("notification")}
           onClick={() => handleNavigate("/notification")}
+          notification={unreadNotificationCount > 0}
+          notificationCount={unreadNotificationCount}
+          notificationColor="bg-red-500"
         />
         {hasPermission(PERMISSIONS.SYSTEM_SETTINGS_MANAGE) && (
           <SidebarItem
@@ -172,6 +304,12 @@ const Dashboard = () => {
               active={isActive("audit/activity-logs")}
               onClick={() => handleNavigate("/audit/activity-logs")}
             />
+            <SidebarItem
+              icon={<Archive className="w-4 h-4" />}
+              text="Records"
+              active={isActive("audit/records")}
+              onClick={() => handleNavigate("/audit/records")}
+            />
           </SidebarItem>
         )}
 
@@ -181,7 +319,7 @@ const Dashboard = () => {
             icon={<Settings className="w-5 h-5" />}
             text="Admin Tool"
             active={
-              isActive("admin/account") || isActive("admin/access-settings")
+              isActive("admin/account") || isActive("admin/access-settings") || isActive("admin/notification-rules")
             }
             expandable={true}
             itemId="admin"
@@ -192,7 +330,7 @@ const Dashboard = () => {
                 key={item.path}
                 icon={item.icon}
                 text={item.text}
-                active={isActive(item.path)} // ← Most important
+                active={isActive(item.path)}
                 onClick={() => handleNavigate(item.path)}
               />
             ))}
@@ -203,11 +341,13 @@ const Dashboard = () => {
       {/* Main Content Area */}
       <div
         className={`flex-1 min-w-0 transition-all duration-300 ${
-          isSidebarCollapsed ? "sm:ml-16 lg:ml-16" : "lg:ml-72"
+          isSidebarCollapsed ? "md:ml-0 lg:ml-16" : "md:ml-72 lg:ml-72"
         }`}
       >
         <main className="min-h-screen bg-slate-50 dark:bg-slate-900 p-8 pt-24 [&_*]:scroll-mt-24">
-          <Outlet />
+          <div key={location.pathname} className="page-transition">
+            <Outlet />
+          </div>
         </main>
 
         <footer className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 select-none">
@@ -218,7 +358,7 @@ const Dashboard = () => {
             <span className="text-slate-500 dark:text-slate-500 font-medium">
               Developed by{" "}
               <a
-                href="https://johnalbertsison.vercel.app/"
+                href="https://turkzydev.vercel.app"
                 className="font-medium text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors"
                 target="_blank"
                 rel="noreferrer"

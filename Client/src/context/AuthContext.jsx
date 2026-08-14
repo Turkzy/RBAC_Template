@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef } from "react";
 import api, { endpoints } from "../config/api.js";
+import { PERMISSIONS } from "../utils/permissions.js";
 import SweetAlert from "../components/SweetAlert.jsx";
 import LoaderOverlay from "../components/LoaderOverlay.jsx";
 
@@ -21,6 +22,35 @@ export const AuthProvider = ({ children }) => {
   const timeoutRef = useRef(null);
   const activityListenerRef = useRef(null);
   const [showLoader, setShowLoader] = useState(false);
+
+  const loadSessionTimeoutConfig = async () => {
+    try {
+      const [minutesResponse, enabledResponse] = await Promise.all([
+        api.get(endpoints.systemSettings.get("session_timeout_minutes")),
+        api.get(endpoints.systemSettings.get("session_timeout_enabled")),
+      ]);
+
+      const minutesValue = Number(minutesResponse?.data?.setting?.value);
+      const enabledValue = enabledResponse?.data?.setting?.value;
+
+      const nextConfig = {
+        minutes: Number.isFinite(minutesValue) && minutesValue > 0 ? minutesValue : 30,
+        enabled:
+          String(enabledValue ?? "true").toLowerCase() !== "false" &&
+          String(enabledValue ?? "true").toLowerCase() !== "0" &&
+          String(enabledValue ?? "true").toLowerCase() !== "off",
+      };
+
+      setSessionTimeoutConfig(nextConfig);
+      try {
+        localStorage.setItem("sessionTimeoutConfig", JSON.stringify(nextConfig));
+      } catch {
+        // ignore storage write failure
+      }
+    } catch (err) {
+      console.error("Failed to load session timeout config", err);
+    }
+  };
 
   const verifyAuth = async () => {
     // prevent concurrent duplicate verify calls (caused by StrictMode/HMR remounts)
@@ -68,6 +98,15 @@ export const AuthProvider = ({ children }) => {
       setAuthStatus("unauthorized");
     }
   }, []);
+
+  const permissions = user?.permissions ?? [];
+  const hasPermission = (name) => permissions.includes(name);
+
+  useEffect(() => {
+    if (authStatus === "authorized" && hasPermission(PERMISSIONS.SYSTEM_SETTINGS_MANAGE)) {
+      loadSessionTimeoutConfig();
+    }
+  }, [authStatus, user]);
 
   const login = (userData) => {
     sessionStorage.setItem("user", JSON.stringify(userData));
@@ -158,9 +197,6 @@ export const AuthProvider = ({ children }) => {
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, []);
-
-  const permissions = user?.permissions ?? [];
-  const hasPermission = (name) => permissions.includes(name);
 
   return (
     <AuthContext.Provider

@@ -23,6 +23,11 @@ import { createCsrfToken } from "../utils/csrf.js";
 import { generateTwoFactorCode, storeTwoFactorCode, verifyTwoFactorCode } from "../utils/twoFactor.js";
 import { createTrustedDeviceToken, verifyTrustedDeviceToken } from "../utils/trustDevice.js";
 import { sendEmail } from "../config/mail.js";
+import { sendTwoFactorCodeEmail } from "../services/mailService.js";
+import { isValidEmail } from "../utils/emailValidation.js";
+import { isStrongPassword } from "../validations/passwordValidation.js";
+import { sanitizeString } from "../utils/sanitizeInput.js";
+import { getGenericAccountMessage, getGenericAuthMessage } from "../utils/securityMessages.js";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -83,33 +88,39 @@ const formatUser = (user) => ({
 export const createAccount = async (req, res) => {
   try {
     const { email, password, username, roleId, firstName, middleName, lastName, workgroupId, unitsId, position, address, birthdate, DepartmentId } = req.body;
+    const safeFirstName = sanitizeString(firstName);
+    const safeMiddleName = sanitizeString(middleName);
+    const safeLastName = sanitizeString(lastName);
+    const safeUsername = sanitizeString(username);
+    const safePosition = sanitizeString(position);
+    const safeAddress = sanitizeString(address);
 
     if (!email || !username || !password) {
       return res.status(400).json({ error: true, message: "Email, username and password are required" });
     }
 
-    if (!firstName || !lastName) {
+    if (!safeFirstName || !safeLastName) {
       return res.status(400).json({ error: true, message: "First name and last name are required" });
     }
 
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    if (!emailRegex.test(email)) {
+    if (!isValidEmail(email)) {
       return res.status(400).json({ error: true, message: "Invalid email format" });
     }
 
-    const isEmailTaken = await User.findOne({ where: { email } });
-    const isUsernameTaken = await User.findOne({ where: { username } });
+    const normalizedEmail = email.trim().toLowerCase();
+    const isEmailTaken = await User.findOne({ where: { email: normalizedEmail } });
+    const isUsernameTaken = await User.findOne({ where: { username: safeUsername } });
     if (isEmailTaken || isUsernameTaken) {
       console.warn(`Account creation conflict for email=${email} username=${username}`);
       try {
         await recordActivity(req, "create_conflict", "Account creation conflict detected", {
-          email,
-          username,
+          email: normalizedEmail,
+          username: safeUsername,
         });
       } catch (e) {
         console.error("Failed to record create_conflict activity:", e?.message || e);
       }
-      return res.status(409).json({ error: true, message: "Account creation failed due to conflict" });
+      return res.status(409).json({ error: true, message: getGenericAccountMessage("create") });
     }
 
     // ✅ Admin (AccountPage "Add User") can pass a roleId directly.
@@ -119,6 +130,18 @@ export const createAccount = async (req, res) => {
       assignedRole = await Role.findByPk(roleId);
       if (!assignedRole) {
         return res.status(400).json({ error: true, message: "Selected role does not exist" });
+      }
+
+      const requester = await User.findByPk(req.user?.userId, {
+        include: [{ model: Role, as: "role" }],
+      });
+
+      if (!requester?.role) {
+        return res.status(403).json({ error: true, message: "Forbidden: No role assigned" });
+      }
+
+      if (!canAssignRole(requester.role?.name, assignedRole.name)) {
+        return res.status(403).json({ error: true, message: "You are not authorized to assign this role" });
       }
     } else {
       assignedRole = await Role.findOne({ where: { name: "User" } });
@@ -151,17 +174,17 @@ export const createAccount = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = await User.create({
-      firstName,
-      middleName: middleName || null,
-      lastName,
-      email,
+      firstName: safeFirstName,
+      middleName: safeMiddleName || null,
+      lastName: safeLastName,
+      email: normalizedEmail,
       password: hashedPassword,
-      username,
+      username: safeUsername,
       roleId: assignedRole.id,
       workgroupId: workgroupId || null,
       unitsId: unitsId || null,
-      position: position || null,
-      address: address || null,
+      position: safePosition || null,
+      address: safeAddress || null,
       birthdate: birthdate || null,
       DepartmentId: DepartmentId || null,
     });
@@ -215,7 +238,7 @@ export const login = async (req, res) => {
       } catch (logErr) {
         console.error("Failed to record login_failed activity:", logErr?.message || logErr);
       }
-      return res.status(400).json({ error: true, message: "Invalid email or password" });
+      return res.status(400).json({ error: true, message: getGenericAuthMessage() });
     }
 
     if (user.status !== "Active") {
@@ -267,11 +290,7 @@ export const login = async (req, res) => {
 
       const twoFactorCode = generateTwoFactorCode();
       storeTwoFactorCode(user.id, twoFactorCode);
-      void sendEmail(
-        user.email,
-        "Your NDC CMS verification code",
-        `<p>Your verification code is <strong>${twoFactorCode}</strong>. It expires in 10 minutes.</p>`
-      ).catch((e) => console.error("Failed to send 2FA email:", e?.message || e));
+      void sendTwoFactorCodeEmail(user.email, twoFactorCode).catch((e) => console.error("Failed to send 2FA email:", e?.message || e));
 
       return res.status(200).json({ error: false, requiresTwoFactor: true, message: "A verification code has been sent to your email." });
     }
@@ -363,7 +382,7 @@ export const getAllUsers = async (req, res) => {
         {
           model: Role,
           as: "role",
-          include: [{ model: Permission, as: "Permissions", attributes: ["id", "name"] }],
+          include: [{ model: Permission, as: "Permissions", attributes: ["id", "name", "label"] }],
         },
       ],
     });
@@ -372,13 +391,16 @@ export const getAllUsers = async (req, res) => {
       return res.status(403).json({ error: true, message: "Forbidden: No role assigned" });
     }
 
-    // If the requester's role includes the accounts.manage permission, treat
-    // them like a supervisor for listing purposes (no department/self restriction).
-    const rolePermNames = requester.role?.Permissions?.map((p) => p.name) || [];
-    const allowFullAccess = rolePermNames.includes(PERMISSIONS.ACCOUNTS_MANAGE);
+    const scope = getUserAccessScope(requester);
+    const where = {};
 
-    const scope = allowFullAccess ? null : getUserAccessScope(requester);
-    const where = scope && scope.DepartmentId !== undefined ? { DepartmentId: scope.DepartmentId } : {};
+    if (scope && scope.DepartmentId !== undefined) {
+      where.DepartmentId = scope.DepartmentId;
+    } else if (scope && scope.workgroupId !== undefined) {
+      where.workgroupId = scope.workgroupId;
+    } else if (scope && scope.id !== undefined) {
+      where.id = scope.id;
+    }
 
     const users = await User.findAll({
       where,
@@ -444,11 +466,11 @@ export const updateUser = async (req, res) => {
     const updateData = {};
 
     if (email) {
-      const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-      if (!emailRegex.test(email)) {
+      if (!isValidEmail(email)) {
         return res.status(400).json({ error: true, message: "Invalid email format" });
       }
-      const existingEmail = await User.findOne({ where: { email } });
+      const normalizedEmail = email.trim().toLowerCase();
+      const existingEmail = await User.findOne({ where: { email: normalizedEmail } });
       if (existingEmail && existingEmail.id !== Number(id)) {
         console.warn(`Update conflict: email ${email} already in use (target=${id})`);
         try {
@@ -456,14 +478,14 @@ export const updateUser = async (req, res) => {
             updaterId: req.user?.userId,
             targetUserId: id,
             field: "email",
-            value: email,
+            value: normalizedEmail,
           });
         } catch (e) {
           console.error("Failed to record update_conflict activity:", e?.message || e);
         }
-        return res.status(409).json({ error: true, message: "Update failed due to conflict" });
+        return res.status(409).json({ error: true, message: getGenericAccountMessage("update") });
       }
-      updateData.email = email;
+      updateData.email = normalizedEmail;
     }
 
     if (password) {
@@ -474,7 +496,7 @@ export const updateUser = async (req, res) => {
         return res.status(400).json({ error: true, message: "Password cannot be empty." });
       }
 
-      if (!/^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/.test(password)) {
+      if (!isStrongPassword(password)) {
         return res.status(400).json({ error: true, message: "Password must be at least 8 characters long and include an uppercase letter, lowercase letter, number, and special character." });
       }
 
@@ -491,32 +513,39 @@ export const updateUser = async (req, res) => {
       updateData.password = await bcrypt.hash(password, 10);
     }
 
-    if (username) {
-      const existingUsername = await User.findOne({ where: { username } });
+    const safeFirstName = sanitizeString(firstName);
+    const safeMiddleName = sanitizeString(middleName);
+    const safeLastName = sanitizeString(lastName);
+    const safeUsername = sanitizeString(username);
+    const safePosition = sanitizeString(position);
+    const safeAddress = sanitizeString(address);
+
+    if (safeUsername) {
+      const existingUsername = await User.findOne({ where: { username: safeUsername } });
       if (existingUsername && existingUsername.id !== Number(id)) {
-        console.warn(`Update conflict: username ${username} already in use (target=${id})`);
+        console.warn(`Update conflict: username ${safeUsername} already in use (target=${id})`);
         try {
           await recordActivity(req, "update_conflict", "Username conflict on update", {
             updaterId: req.user?.userId,
             targetUserId: id,
             field: "username",
-            value: username,
+            value: safeUsername,
           });
         } catch (e) {
           console.error("Failed to record update_conflict activity:", e?.message || e);
         }
-        return res.status(409).json({ error: true, message: "Update failed due to conflict" });
+        return res.status(409).json({ error: true, message: getGenericAccountMessage("update") });
       }
-      updateData.username = username;
+      updateData.username = safeUsername;
     }
 
-    if (firstName) updateData.firstName = firstName;
-    if (lastName) updateData.lastName = lastName;
+    if (safeFirstName) updateData.firstName = safeFirstName;
+    if (safeLastName) updateData.lastName = safeLastName;
     // Middle name is optional — allow explicitly clearing it by sending an
     // empty string, but ignore when omitted.
-    if (middleName !== undefined) updateData.middleName = middleName || null;
-    if (position !== undefined) updateData.position = position || null;
-    if (address !== undefined) updateData.address = address || null;
+    if (middleName !== undefined) updateData.middleName = safeMiddleName || null;
+    if (position !== undefined) updateData.position = safePosition || null;
+    if (address !== undefined) updateData.address = safeAddress || null;
     if (birthdate !== undefined) updateData.birthdate = birthdate || null;
 
     // ✅ Role reassignment (used by the Edit User modal)

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import backgroundlogin from "../assets/login.png";
 import logo from "../assets/ndc_logo.png";
@@ -16,6 +16,8 @@ const Login = () => {
   const [rememberMe, setRememberMe] = useState(false);
   const [requiresTwoFactor, setRequiresTwoFactor] = useState(false);
   const [twoFactorCode, setTwoFactorCode] = useState("");
+  const otpRefs = useRef([]);
+  const otpLength = 6;
 
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -64,6 +66,12 @@ const Login = () => {
           return;
         }
       } else {
+        if (twoFactorCode.length !== otpLength) {
+          setError("Please enter the full 6-digit verification code.");
+          setLoading(false);
+          return;
+        }
+
         const response = await api.post(endpoints.auth.login, {
           email,
           password,
@@ -118,12 +126,58 @@ const Login = () => {
     setError(null);
   };
 
+  const handleOtpChange = (index, value) => {
+    const digit = value.replace(/\D/g, "").slice(-1);
+    const nextCode = twoFactorCode.split("");
+    nextCode[index] = digit;
+    const normalizedCode = nextCode.join("").slice(0, otpLength);
+
+    setTwoFactorCode(normalizedCode);
+
+    if (digit && index < otpLength - 1) {
+      otpRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index, event) => {
+    if (event.key === "Backspace" && !twoFactorCode[index] && index > 0) {
+      otpRefs.current[index - 1]?.focus();
+    }
+
+    if (event.key === "ArrowLeft" && index > 0) {
+      otpRefs.current[index - 1]?.focus();
+    }
+
+    if (event.key === "ArrowRight" && index < otpLength - 1) {
+      otpRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpPaste = (event) => {
+    event.preventDefault();
+    const pasted = (event.clipboardData.getData("text") || "").replace(/\D/g, "").slice(0, otpLength);
+    if (!pasted) return;
+
+    const nextCode = pasted.split("");
+    const paddedCode = Array.from({ length: otpLength }, (_, index) => nextCode[index] || "");
+    setTwoFactorCode(paddedCode.join(""));
+
+    const nextIndex = Math.min(pasted.length, otpLength - 1);
+    otpRefs.current[nextIndex]?.focus();
+  };
+
+  useEffect(() => {
+    if (requiresTwoFactor) {
+      otpRefs.current[0]?.focus();
+    }
+  }, [requiresTwoFactor]);
+
   return (
     <div
-      className="h-screen w-screen bg-cover bg-center flex items-center justify-start select-none px-4 animate-fade-in sm:px-8 md:px-12 lg:px-16"
+      className="h-screen w-screen bg-cover bg-center flex items-center justify-center lg:justify-start select-none px-4 animate-fade-in sm:px-8 md:px-12 lg:px-16"
       style={{ backgroundImage: `url(${backgroundlogin})` }}
     >
-      <div className="flex flex-col items-center space-y-6 w-full max-w-xs sm:max-w-sm lg:max-w-md lg:ml-32 md:ml-16 ml-0">
+      <div className="flex flex-col items-center space-y-6 w-full max-w-xs sm:max-w-sm lg:max-w-md lg:ml-32">
         <img src={logo} className="h-20 sm:h-24 md:h-28 lg:h-32 w-auto" />
         <h1 className="text-lg sm:text-2xl md:text-3xl lg:text-4xl font-bold text-gray-700 leading-tight whitespace-nowrap sm:whitespace-normal font-tahoma text-center">
           Compliance Monitoring System
@@ -210,17 +264,28 @@ const Login = () => {
               </>
             ) : (
               <>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="mb-2 block text-sm font-medium text-gray-700">
                   Verification Code
                 </label>
-                <input
-                  type="text"
-                  value={twoFactorCode}
-                  onChange={(e) => setTwoFactorCode(e.target.value)}
-                  placeholder="Enter the 6-digit code"
-                  autoComplete="one-time-code"
-                  className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm bg-white/90 placeholder-gray-400 focus:border-green-100 focus:outline-none focus:ring-1 focus:ring-green-700 dark:text-black"
-                />
+                <div className="flex items-center justify-between gap-2" onPaste={handleOtpPaste}>
+                  {Array.from({ length: otpLength }).map((_, index) => (
+                    <input
+                      key={`otp-${index}`}
+                      ref={(element) => {
+                        otpRefs.current[index] = element;
+                      }}
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={1}
+                      value={twoFactorCode[index] || ""}
+                      onChange={(event) => handleOtpChange(index, event.target.value)}
+                      onKeyDown={(event) => handleOtpKeyDown(index, event)}
+                      onFocus={(event) => event.target.select()}
+                      className="h-12 w-10 rounded-xl border border-gray-300 bg-white/90 text-center text-base font-semibold text-gray-800 shadow-sm transition-all duration-200 focus:border-green-600 focus:outline-none focus:ring-2 focus:ring-green-200 dark:text-black sm:h-14 sm:w-12"
+                      aria-label={`Verification digit ${index + 1}`}
+                    />
+                  ))}
+                </div>
                 <div className="mt-2 flex items-center justify-between">
                   <div />
                   <button

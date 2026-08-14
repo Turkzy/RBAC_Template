@@ -41,9 +41,23 @@ export const getUserAccessScope = (requester) => {
     return null;
   }
 
+  // Allow roles granted the ACCOUNTS_MANAGE permission to view all users
+  if (hasPermissionForUser(requester, PERMISSIONS.ACCOUNTS_MANAGE)) {
+    return null;
+  }
+
+  const roleName = String(requester?.role?.name || requester?.roleName || "")
+    .trim()
+    .toLowerCase();
+
   const departmentId = requester.DepartmentId ?? requester.departmentId ?? null;
   if (departmentId !== null && departmentId !== undefined && departmentId !== "") {
     return { DepartmentId: departmentId };
+  }
+
+  const workgroupId = requester.workgroupId ?? requester.workgroup?.id ?? null;
+  if (roleName.includes("workgroup") && workgroupId !== null && workgroupId !== undefined && workgroupId !== "") {
+    return { workgroupId };
   }
 
   return { id: requester.id };

@@ -10,6 +10,8 @@ import {
   Eye,
   UserX,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import api, { endpoints, FILE_BASE_URL } from "../config/api.js";
 import ViewProfilePage from "../components/ViewProfilePage.jsx";
@@ -52,7 +54,132 @@ const UserAvatar = ({ user }) => {
   );
 };
 
+const Pagination = ({ currentPage, totalPages, onPageChange, inFooter = false }) => {
+  const [goToPageInput, setGoToPageInput] = useState("");
+
+  const handleGoToPage = () => {
+    const num = parseInt(goToPageInput, 10);
+    if (num >= 1 && num <= totalPages) {
+      onPageChange(num);
+      setGoToPageInput("");
+    }
+  };
+
+  if (totalPages <= 1) return null;
+
+  const getPageNumbers = () => {
+    if (totalPages <= 6) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+
+    const showStart = currentPage <= 3;
+    const showEnd = currentPage >= totalPages - 2;
+    const pages = new Set([1, totalPages]);
+
+    if (showStart) {
+      pages.add(2);
+      pages.add(3);
+      pages.add(4);
+    }
+
+    if (showEnd) {
+      pages.add(totalPages - 3);
+      pages.add(totalPages - 2);
+      pages.add(totalPages - 1);
+    }
+
+    if (!showStart && !showEnd) {
+      pages.add(currentPage - 1);
+      pages.add(currentPage);
+      pages.add(currentPage + 1);
+    }
+
+    const sorted = [...pages].sort((a, b) => a - b);
+    const result = [];
+    let prev = 0;
+
+    for (const p of sorted) {
+      if (p - prev > 1) result.push("ellipsis");
+      result.push(p);
+      prev = p;
+    }
+
+    return result;
+  };
+
+  const pageNumbers = getPageNumbers();
+
+  return (
+    <div
+      className={`flex flex-row flex-nowrap items-center justify-end gap-1 sm:gap-2 lg:gap-3 font-montserrat text-xs sm:text-sm overflow-x-auto scrollbar-green ${
+        inFooter ? "" : "mt-3 sm:mt-4"
+      }`}
+    >
+      <button
+        onClick={() => onPageChange(currentPage - 1)}
+        disabled={currentPage === 1}
+        className="p-2 text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+        aria-label="Previous page"
+      >
+        <ChevronLeft className="w-4 h-4" />
+      </button>
+
+      <div className="flex items-center gap-1">
+        {pageNumbers.map((p, idx) =>
+          p === "ellipsis" ? (
+            <span key={`ellipsis-${idx}`} className="px-2 text-gray-500 dark:text-slate-400">
+              ...
+            </span>
+          ) : (
+            <button
+              key={p}
+              onClick={() => onPageChange(p)}
+              className={`min-w-[28px] sm:min-w-[32px] h-7 sm:h-8 px-1.5 sm:px-2 rounded-md text-xs sm:text-sm font-medium transition ${
+                p === currentPage
+                  ? "bg-emerald-500 text-white shadow-md hover:bg-emerald-600"
+                  : "text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700"
+              }`}
+            >
+              {p}
+            </button>
+          ),
+        )}
+      </div>
+
+      <button
+        onClick={() => onPageChange(currentPage + 1)}
+        disabled={currentPage === totalPages}
+        className="p-2 text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition"
+        aria-label="Next page"
+      >
+        <ChevronRight className="w-4 h-4" />
+      </button>
+
+      <div className="flex items-center gap-1 sm:gap-2 ml-2 sm:ml-4 pl-2 sm:pl-4 border-l border-gray-200 dark:border-slate-700 whitespace-nowrap shrink-0">
+        <span className="text-[10px] sm:text-sm text-gray-500 dark:text-slate-400">Go to page</span>
+        <input
+          type="number"
+          min={1}
+          max={totalPages}
+          value={goToPageInput}
+          onChange={(e) => setGoToPageInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleGoToPage()}
+          placeholder=""
+          className="w-11 sm:w-14 px-1.5 sm:px-2 py-1 text-[11px] sm:text-sm border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-transparent"
+        />
+        <button
+          onClick={handleGoToPage}
+          className="px-2 sm:px-3 py-1 text-[11px] sm:text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600 transition"
+        >
+          Go
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const AccountPage = () => {
+  const PAGE_SIZE = 10;
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
   const [workgroups, setWorkgroups] = useState([]);
@@ -64,6 +191,7 @@ const AccountPage = () => {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
+  const [page, setPage] = useState(1);
   const [openMenuId, setOpenMenuId] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
@@ -286,8 +414,26 @@ const AccountPage = () => {
     return matchesSearch && matchesRole;
   });
 
+  const totalFilteredUsers = filteredUsers.length;
+  const totalPages = Math.max(1, Math.ceil(totalFilteredUsers / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedUsers = filteredUsers.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE,
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, roleFilter]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
   return (
-    <div className="rounded-lg p-6 select-none">
+    <div className="rounded-lg select-none">
       {/* If a user is selected, show the profile page instead of the table */}
       {selectedUser ? (
         <ViewProfilePage
@@ -321,13 +467,13 @@ const AccountPage = () => {
           <div className="mb-6 flex flex-col gap-2">
             <div className="flex flex-col sm:flex-row flex-wrap gap-2 items-start sm:items-center sm:justify-end">
               <div className="relative w-full sm:w-auto">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
                 <input
                   type="text"
                   placeholder="Search by name, username, or email..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 pl-9 pr-3 py-2 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                  className="w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
                 />
               </div>
 
@@ -384,88 +530,113 @@ const AccountPage = () => {
 
           {/* Table */}
           {!loading && !error && (
-            <div className="flex flex-col gap-3">
-              <div className="overflow-x-auto scrollbar-green">
-                <table className="min-w-full table-auto text-sm bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-                  <thead>
-                    <tr className="bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
-                      <th className="px-5 py-3 text-left whitespace-nowrap">Profile</th>
-                      <th className="px-5 py-3 text-left whitespace-nowrap min-w-[220px]">Name</th>
-                      <th className="px-5 py-3 text-left whitespace-nowrap min-w-[120px]">Username</th>
-                      <th className="px-5 py-3 text-left whitespace-nowrap min-w-[120px]">Role</th>
-                      <th className="px-5 py-3 text-left whitespace-nowrap min-w-[140px]">Workgroup</th>
-                      <th className="px-5 py-3 text-left whitespace-nowrap">Status</th>
-                      <th className="px-5 py-3 text-left whitespace-nowrap min-w-[180px]">Last Login</th>
-                      <th className="px-5 py-3 text-center whitespace-nowrap">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {filteredUsers.length === 0 ? (
-                      <tr>
-                        <td colSpan={8} className="text-center py-12 text-slate-400 dark:text-slate-500">
-                          No users found.
-                        </td>
+            <>
+              <div className="rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                <div className="overflow-x-auto scrollbar-green">
+                  <table className="min-w-full text-sm bg-white dark:bg-slate-900">
+                    <thead>
+                      <tr className="bg-slate-50 dark:bg-slate-950/20 text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
+                        <th className="px-5 py-3 text-left whitespace-nowrap">Profile</th>
+                        <th className="px-5 py-3 text-left whitespace-nowrap">Name</th>
+                        <th className="px-5 py-3 text-left whitespace-nowrap">Username</th>
+                        <th className="px-5 py-3 text-left whitespace-nowrap">Role</th>
+                        <th className="px-5 py-3 text-left whitespace-nowrap">Workgroup</th>
+                        <th className="px-5 py-3 text-left whitespace-nowrap">Status</th>
+                        <th className="px-5 py-3 text-left whitespace-nowrap">Last Login</th>
+                        <th className="px-5 py-3 text-center whitespace-nowrap">Actions</th>
                       </tr>
-                    ) : (
-                      filteredUsers.map((user) => (
-                        <tr
-                          key={user.id}
-                          className="hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
-                        >
-                          <td className="px-5 py-3.5 whitespace-nowrap">
-                            <UserAvatar user={user} />
-                          </td>
-                          <td className="px-5 py-3.5 min-w-[220px] align-top">
-                            <div className="font-medium text-slate-700 dark:text-slate-200 break-words">
-                              {user.fullName || "—"}
-                            </div>
-                            <div className="text-xs text-slate-400 dark:text-slate-500 break-words">
-                              {user.email}
-                            </div>
-                          </td>
-                          <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400 whitespace-normal break-words sm:whitespace-nowrap">
-                            <span className="block max-w-full">{user.username}</span>
-                          </td>
-                          <td className="px-5 py-3.5 whitespace-normal break-words sm:whitespace-nowrap">
-                            <span className="inline-flex max-w-full px-3 py-1 text-xs font-medium rounded-md bg-blue-100 text-blue-700 dark:bg-blue-600 dark:text-white">
-                              {user.role || "—"}
-                            </span>
-                          </td>
-                          <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400 whitespace-normal break-words sm:whitespace-nowrap">
-                            <span className="block max-w-full">{(typeof user.workgroup === "object"
-                              ? user.workgroup?.workgroupName
-                              : user.workgroup) || "—"}</span>
-                          </td>
-                          <td className="px-5 py-3.5 whitespace-normal break-words sm:whitespace-nowrap">
-                            <span
-                              className={`inline-flex max-w-full px-3 py-1 text-xs font-medium rounded-md ${user.status === "Active"
-                                  ? "bg-green-100 text-green-700 dark:bg-green-600 dark:text-white"
-                                  : "bg-red-100 text-red-700 dark:bg-red-600 dark:text-white"
-                                }`}>
-                              {user.status}
-                            </span>
-                          </td>
-                          <td className="px-5 py-3.5 text-slate-500 dark:text-slate-400 whitespace-normal break-words sm:whitespace-nowrap">
-                            <span className="block max-w-full">{formatLastLogin(user.lastLogin)}</span>
-                          </td>
-                          <td className="px-5 py-3.5 text-center whitespace-nowrap">
-                            <button
-                              onClick={(e) => toggleMenu(user.id, e)}
-                              className="p-1 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition"
-                            >
-                              <EllipsisVertical size={15} className="text-slate-400 dark:text-slate-500" />
-                            </button>
+                    </thead>
+                    <tbody className="bg-white dark:bg-slate-800/40 divide-y divide-slate-200 dark:divide-slate-700">
+                      {paginatedUsers.length === 0 ? (
+                        <tr>
+                          <td colSpan={8} className="text-center py-12 text-slate-400 dark:text-slate-500">
+                            No users found.
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                      ) : (
+                        paginatedUsers.map((user) => (
+                          <tr
+                            key={user.id}
+                            className="hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
+                          >
+                            <td className="px-5 py-3.5 whitespace-nowrap align-top">
+                              <UserAvatar user={user} />
+                            </td>
+                            <td className="px-5 py-3.5 text-xs sm:text-sm align-top">
+                              <div className="font-medium text-slate-700 dark:text-slate-200 whitespace-nowrap overflow-hidden text-ellipsis">
+                                {user.fullName || "—"}
+                              </div>
+                              <div className="text-xs text-slate-400 dark:text-slate-500 whitespace-nowrap overflow-hidden text-ellipsis">
+                                {user.email}
+                              </div>
+                            </td>
+                            <td className="px-5 py-3.5 text-xs sm:text-sm text-slate-500 dark:text-slate-400 align-top">
+                              <span className="block max-w-full whitespace-nowrap overflow-hidden text-ellipsis">{user.username}</span>
+                            </td>
+                            <td className="px-5 py-3.5 text-xs sm:text-sm align-top">
+                              <span className="inline-flex max-w-full px-3 py-1 text-xs font-medium rounded-md bg-blue-100 text-blue-700 dark:bg-blue-600 dark:text-white whitespace-nowrap overflow-hidden text-ellipsis">
+                                {user.role || "—"}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3.5 text-xs sm:text-sm text-slate-500 dark:text-slate-400 align-top">
+                              <span className="block max-w-full whitespace-nowrap overflow-hidden text-ellipsis">{(typeof user.workgroup === "object"
+                                ? user.workgroup?.workgroupName
+                                : user.workgroup) || "—"}</span>
+                            </td>
+                            <td className="px-5 py-3.5 text-xs sm:text-sm align-top">
+                              <span
+                                className={`inline-flex max-w-full px-3 py-1 text-xs font-medium rounded-md whitespace-nowrap overflow-hidden text-ellipsis ${user.status === "Active"
+                                    ? "bg-green-100 text-green-700 dark:bg-green-600 dark:text-white"
+                                    : "bg-red-100 text-red-700 dark:bg-red-600 dark:text-white"
+                                  }`}>
+                                {user.status}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3.5 text-xs sm:text-sm text-slate-500 dark:text-slate-400 align-top">
+                              <span className="block max-w-full whitespace-nowrap overflow-hidden text-ellipsis">{formatLastLogin(user.lastLogin)}</span>
+                            </td>
+                            <td className="px-5 py-3.5 text-center whitespace-nowrap align-top">
+                              <button
+                                type="button"
+                                onClick={(e) => toggleMenu(user.id, e)}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:text-slate-500 dark:hover:bg-slate-700 transition"
+                                aria-label="Open actions"
+                              >
+                                <EllipsisVertical size={15} className="pointer-events-none" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                    <tfoot className="border-t border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-950/30">
+                      <tr>
+                        <td colSpan={8} className="px-5 py-3">
+                          <div className="flex flex-row items-center justify-between gap-3">
+                            <div className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap">
+                              {totalFilteredUsers === 0 ? (
+                                <span>Showing 0 of 0 users</span>
+                              ) : (
+                                <span>
+                                  Showing {(currentPage - 1) * PAGE_SIZE + 1}-
+                                  {Math.min(currentPage * PAGE_SIZE, totalFilteredUsers)} of {totalFilteredUsers} users
+                                </span>
+                              )}
+                            </div>
+                            <Pagination
+                              currentPage={currentPage}
+                              totalPages={totalPages}
+                              onPageChange={setPage}
+                              inFooter={true}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
               </div>
-              <p className="text-xs text-slate-400 dark:text-slate-500 mt-3 px-1">
-                Showing {filteredUsers.length} of {users.length} users
-              </p>
-            </div>
+            </>
           )}
 
           {/* Fixed dropdown */}

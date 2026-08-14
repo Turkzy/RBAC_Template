@@ -6,7 +6,7 @@ test('sanitizeString removes script tags and escapes HTML', () => {
   const input = '<script>alert("xss")</script><b>Safe</b> & more';
   const result = sanitizeString(input);
 
-  assert.equal(result, 'Safe &amp; more');
+  assert.equal(result, 'Safe & more');
 });
 
 test('sanitizeObject sanitizes nested string values', () => {

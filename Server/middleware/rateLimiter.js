@@ -1,14 +1,16 @@
 import rateLimit from "express-rate-limit";
 
+// rateLimiter.js
 const isDev = process.env.NODE_ENV === "development";
+const enableRateLimitInDev = process.env.ENABLE_RATE_LIMIT_DEV === "true";
 
 export const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per windowMs
+    windowMs: 15 * 60 * 1000,
+    max: 100,
     message: "Too many requests from this IP, please try again later.",
-    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-    skip: () => isDev, // Skip rate limiting in development
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: () => isDev && !enableRateLimitInDev, // Only skip if dev AND not enabled
 });
 
 //Login rate limiter

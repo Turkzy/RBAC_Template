@@ -3,6 +3,7 @@ import cors from "cors";
 import bodyParser from "body-parser";
 import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
+import { DataTypes } from "sequelize";
 import fileUpload from "express-fileupload";
 import helmet from "helmet";
 import timeout from "connect-timeout";
@@ -18,12 +19,17 @@ import UnitRoute from "./routes/UnitRoute.js";
 import DepartmentRoute from "./routes/DepartmentRoute.js";
 import ActivityLogRoute from "./routes/ActivityLogRoute.js";
 import ComplianceRoute from "./routes/ComplianceRoute.js";
+import ComplianceFormsRoute from "./routes/ComplianceFormsRoute.js";
 import PasswordResetRoute from "./routes/PasswordResetRoute.js";
+import SystemSettingRoute from "./routes/SystemSettingRoute.js";
+import NotificationRuleRoute from "./routes/NotificationruleRoutes.js";
 import { testMailConnection } from "./config/mail.js";
 import { sanitizeBody } from "./utils/sanitizeInput.js";
 import { createCsrfToken, verifyCsrfToken } from "./utils/csrf.js";
+import { startComplianceReminderScheduler } from "./services/complianceReminderService.js";
+import SystemSetting from "./models/SystemSettingModel.js";
 
-dotenv.config();
+dotenv.config({ silent: true });
 
 const isProd = process.env.NODE_ENV === "production";
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || "")
@@ -88,7 +94,6 @@ app.use(sanitizeBody);
 // Controls which domains can call your API. `credentials: true` is required
 // for cookies to work cross-origin. In development we allow any origin
 // to make local testing simpler; in production we enforce the configured list.
-console.log("CORS allowedOrigins:", allowedOrigins, "FRONTEND_ORIGIN:", frontendOrigin, "NODE_ENV:", process.env.NODE_ENV);
 const corsOptions = {
   origin(origin, callback) {
     if (!origin) return callback(null, true); // allow Postman/curl and non-browser requests
@@ -104,7 +109,7 @@ const corsOptions = {
     return callback(new Error(`Origin ${origin} not allowed by CORS`));
   },
   credentials: true, // allow cookies
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-CSRF-Token"],
 };
 
@@ -139,6 +144,9 @@ const staticCorsMiddleware = (req, res, next) => {
 
 //7. EXPRESS STATIC - SERVE LOCATION FOR UPLOADS FILES
 app.use("/userimages", staticCorsMiddleware, express.static(path.join(process.cwd(), "uploads/userimages")));
+app.use("/compliances", staticCorsMiddleware, express.static(path.join(process.cwd(), "uploads/compliances")));
+// Serve public assets (e.g., logo for emails)
+app.use("/public", staticCorsMiddleware, express.static(path.join(process.cwd(), "public")));
 
 
 //8. FILEUPLOAD - HANDLE MULTIPART UPLOADS
@@ -158,8 +166,6 @@ app.use((req, res, next) => {
 // causing 429 responses during development.
 if (isProd) {
   app.use("/api", apiLimiter);
-} else {
-  console.log("API rate limiter disabled in development (local). Restart server to enable production limits.");
 }
 
 
@@ -171,7 +177,10 @@ app.use("/api/units", UnitRoute);
 app.use("/api/departments", DepartmentRoute);
 app.use("/api/activity-logs", ActivityLogRoute);
 app.use("/api/compliance", ComplianceRoute);
+app.use("/api/compliance-forms", ComplianceFormsRoute);
 app.use("/api/password-reset", PasswordResetRoute);
+app.use("/api/system-settings", SystemSettingRoute);
+app.use("/api/notification-rules", NotificationRuleRoute);
 
 app.use((req, res, next) => {
   if (!req.timedout) next();
@@ -190,23 +199,57 @@ app.use((err, req, res, next) => {
 testMailConnection();
 
 // 11. CONNECTING TO MYSQL
+const c = {
+  reset: "\x1b[0m",
+  bold: "\x1b[1m",
+  emerald: "\x1b[38;5;42m",
+  gray: "\x1b[90m",
+  cyan: "\x1b[36m",
+  green: "\x1b[32m",
+};
+
+const printBanner = () => {
+  console.log(`${c.emerald}${c.bold}
+  ███╗   ██╗██████╗  ██████╗     ██████╗███╗   ███╗███████╗
+  ████╗  ██║██╔══██╗██╔════╝    ██╔════╝████╗ ████║██╔════╝
+  ██╔██╗ ██║██║  ██║██║         ██║     ██╔████╔██║███████╗
+  ██║╚██╗██║██║  ██║██║         ██║     ██║╚██╔╝██║╚════██║
+  ██║ ╚████║██████╔╝╚██████╗    ╚██████╗██║ ╚═╝ ██║███████║
+  ╚═╝  ╚═══╝╚═════╝  ╚═════╝     ╚═════╝╚═╝     ╚═╝╚══════╝
+${c.reset}${c.gray}          Compliance Monitoring System${c.reset}
+
+${c.gray}   █▓▒▒░░░${c.reset}${c.cyan}Ｔｕｒｋｚｙ Ｄｅｖ${c.reset}${c.gray}░░░▒▒▓█${c.reset}
+`);
+};
+
 try {
   await database.authenticate();
 
-  console.log("✅ MySQL connected successfully");
-  console.log("█▓▒▒░░░ＴｕｒｋｚｙＤｅｖ░░░▒▒▓█");
+  printBanner();
+  console.log(`${c.green}✅ MySQL connected successfully${c.reset}`);
 
   await database.sync({ alter: false, force: false });
-  console.log("✅ Database synced");
+  console.log(`${c.green}✅ Database synced${c.reset}`);
 
+  startComplianceReminderScheduler();
+  console.log(`${c.cyan}⏱  Compliance reminder scheduler started${c.reset}`);
 } catch (err) {
   console.error("❌ Database connection error:", err);
 }
 
 
 
-//12. LISTEN TO START SERVER
+// 12. LISTEN TO START SERVER
 const PORT = process.env.PORT;
-app.listen(PORT, "0.0.0.0", () =>
-  console.log(`Server running on port ${PORT}`)
-);
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`${c.emerald}${c.bold}`);
+  console.log(`╔══════════════════════════════════════════╗`);
+  console.log(`║                                          ║`);
+  console.log(`║       🚀 NDC CMS Server Started          ║`);
+  console.log(`║                                          ║`);
+  console.log(`║       ${c.green}✓ Server is running successfully${c.emerald}   ║`);
+  console.log(`║                                          ║`);
+  console.log(`╚══════════════════════════════════════════╝`);
+  console.log(`${c.reset}`);
+});

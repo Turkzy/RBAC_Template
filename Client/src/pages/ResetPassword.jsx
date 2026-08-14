@@ -116,18 +116,18 @@ const ResetPassword = () => {
   if (success) {
     return (
       <div
-        className="min-h-screen flex items-center justify-center bg-cover bg-center px-4"
+        className="min-h-screen flex items-center justify-center bg-cover bg-center px-3 py-6 sm:px-4"
         style={{ backgroundImage: `url(${backgroundlogin})` }}
       >
-        <div className="w-full max-w-xl bg-white/95 rounded-3xl shadow-2xl overflow-hidden backdrop-blur-md border border-white/30">
-          <div className="bg-emerald-600 p-10 text-center text-white">
-            <h1 className="text-3xl font-semibold mb-2">Password Reset Complete</h1>
-            <p className="text-sm text-emerald-100 max-w-xl mx-auto">
+        <div className="w-full max-w-xl overflow-hidden rounded-2xl border border-white/30 bg-white/95 shadow-2xl backdrop-blur-md sm:rounded-3xl">
+          <div className="bg-emerald-600 p-6 text-center text-white sm:p-10">
+            <h1 className="mb-2 text-2xl font-semibold sm:text-3xl">Password Reset Complete</h1>
+            <p className="mx-auto max-w-xl text-xs text-emerald-100 sm:text-sm">
               Your password has been updated successfully. You will be redirected to login shortly.
             </p>
           </div>
-          <div className="p-10">
-            <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 text-4xl font-bold">
+          <div className="p-6 sm:p-10">
+            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 text-4xl font-bold text-emerald-700 sm:h-24 sm:w-24">
               ✓
             </div>
           </div>
@@ -138,28 +138,30 @@ const ResetPassword = () => {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center bg-cover bg-center px-4 py-10"
+      className="min-h-screen flex items-center justify-center bg-cover bg-center px-3 py-6 sm:px-4 sm:py-10"
       style={{ backgroundImage: `url(${backgroundlogin})` }}
     >
-      <div className="w-full max-w-5xl grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
-        <div className="rounded-3xl bg-white/95 p-10 shadow-2xl backdrop-blur-md border border-white/30">
-          <div className="mb-8">
-            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-emerald-500 mb-2">
+      <div className="w-full max-w-5xl grid gap-4 sm:gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:gap-8">
+        <div className="rounded-2xl border border-white/30 bg-white/95 p-5 shadow-2xl backdrop-blur-md sm:rounded-3xl sm:p-8 lg:p-10">
+          <div className="mb-6 sm:mb-8">
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.25em] text-emerald-500 sm:text-xs">
               Reset your password
             </p>
-            <h1 className="text-3xl font-semibold text-slate-900">Create a secure new password</h1>
+            <h1 className="text-2xl font-semibold text-slate-900 sm:text-3xl">
+              Create a secure new password
+            </h1>
           </div>
 
           {error && (
-            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 mb-6">
+            <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-700 sm:rounded-2xl sm:px-4 sm:py-3 sm:text-sm">
               {error}
             </div>
           )}
 
           {token ? (
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
+                <label className="mb-2 block text-xs font-medium text-slate-700 sm:text-sm">
                   New Password
                 </label>
                 <div className="relative">
@@ -169,22 +171,22 @@ const ResetPassword = () => {
                     onChange={handlePasswordChange}
                     onBlur={handlePasswordBlur}
                     placeholder="Enter new password"
-                    className="block w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 pr-12 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="block w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 pr-11 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 sm:rounded-2xl sm:px-4 sm:py-3"
                     required
                     disabled={loading}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400"
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400"
                   >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    {showPassword ? <EyeOff className="h-4 w-4 sm:h-5 sm:w-5" /> : <Eye className="h-4 w-4 sm:h-5 sm:w-5" />}
                   </button>
                 </div>
 
                 {showPasswordValidation && passwordValidationStatus.some((rule) => !rule.valid) && (
-                  <div className="mt-3 rounded-2xl border border-red-200 bg-red-50 p-4 dark:border-red-900/50 dark:bg-red-950/10">
-                    <div className="space-y-2 text-sm">
+                  <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 dark:border-red-900/50 dark:bg-red-950/10 sm:rounded-2xl sm:p-4">
+                    <div className="space-y-2 text-xs sm:text-sm">
                       {passwordValidationStatus
                         .filter((rule) => !rule.valid)
                         .map((rule) => (
@@ -199,7 +201,7 @@ const ResetPassword = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">
+                <label className="mb-2 block text-xs font-medium text-slate-700 sm:text-sm">
                   Confirm Password
                 </label>
                 <input
@@ -207,7 +209,7 @@ const ResetPassword = () => {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Confirm new password"
-                  className="block w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="block w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 sm:rounded-2xl sm:px-4 sm:py-3"
                   required
                   disabled={loading}
                 />
@@ -216,41 +218,41 @@ const ResetPassword = () => {
               <button
                 type="submit"
                 disabled={loading}
-                className={`w-full py-3 rounded-2xl text-white font-semibold transition-all ${
-                  loading ? "bg-slate-400 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700"
+                className={`w-full rounded-xl py-3 text-sm font-semibold text-white transition-all sm:rounded-2xl sm:text-base ${
+                  loading ? "cursor-not-allowed bg-slate-400" : "bg-emerald-600 hover:bg-emerald-700"
                 }`}
               >
                 {loading ? "Resetting..." : "Reset Password"}
               </button>
             </form>
           ) : (
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6 text-center text-slate-600">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-5 text-center text-xs text-slate-600 sm:rounded-2xl sm:p-6 sm:text-sm">
               Invalid reset link
             </div>
           )}
         </div>
 
-        <div className="rounded-3xl bg-emerald-600/95 p-10 text-white shadow-2xl backdrop-blur-md border border-white/30">
-          <div className="mb-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-emerald-200 mb-2">
+        <div className="rounded-2xl border border-white/30 bg-emerald-600/95 p-5 text-white shadow-2xl backdrop-blur-md sm:rounded-3xl sm:p-8 lg:p-10">
+          <div className="mb-5 sm:mb-6">
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.25em] text-emerald-200 sm:text-xs">
               Secure Reset
             </p>
-            <h2 className="text-2xl font-semibold">Why this matters</h2>
+            <h2 className="text-xl font-semibold sm:text-2xl">Why this matters</h2>
           </div>
-          <div className="space-y-4 text-sm text-emerald-100">
-            <div className="rounded-2xl bg-white/10 p-4">
+          <div className="space-y-3 text-xs text-emerald-100 sm:space-y-4 sm:text-sm">
+            <div className="rounded-xl bg-white/10 p-3 sm:rounded-2xl sm:p-4">
               <p className="font-semibold">Strong password</p>
               <p className="mt-1 text-emerald-100/90">
                 Protects your account from unauthorized access and keeps your data safe.
               </p>
             </div>
-            <div className="rounded-2xl bg-white/10 p-4">
+            <div className="rounded-xl bg-white/10 p-3 sm:rounded-2xl sm:p-4">
               <p className="font-semibold">One-time link</p>
               <p className="mt-1 text-emerald-100/90">
                 The reset link expires after one hour and can only be used once.
               </p>
             </div>
-            <div className="rounded-2xl bg-white/10 p-4">
+            <div className="rounded-xl bg-white/10 p-3 sm:rounded-2xl sm:p-4">
               <p className="font-semibold">Verified by email</p>
               <p className="mt-1 text-emerald-100/90">
                 You will receive a confirmation email after your password is changed.

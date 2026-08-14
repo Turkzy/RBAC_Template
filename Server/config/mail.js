@@ -18,12 +18,25 @@ export const mailTransporter = nodemailer.createTransport({
 
 // Test connection on startup
 export const testMailConnection = async () => {
-  try {
-    await mailTransporter.verify();
-    console.log("✓ Gmail SMTP connection successful");
-  } catch (error) {
-    console.error("✗ Gmail SMTP connection failed:", error.message);
+  const retries = 3;
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
+    try {
+      await mailTransporter.verify();
+      console.log("✓ Gmail SMTP connection successful");
+      return;
+    } catch (error) {
+      lastError = error;
+      console.warn(`Gmail SMTP verification attempt ${attempt}/${retries} failed:`, error.message);
+
+      if (attempt < retries) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+    }
   }
+
+  console.error("✗ Gmail SMTP connection failed after retries:", lastError?.message || "Unknown error");
 };
 
 // Send email helper

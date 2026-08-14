@@ -7,7 +7,7 @@ import ActivityLogSettingsModal from "../components/ActivityLogSettingsModal.jsx
 import { PERMISSIONS } from "../utils/permissions.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
-const Pagination = ({ currentPage, totalPages, onPageChange }) => {
+const Pagination = ({ currentPage, totalPages, onPageChange, inFooter = false }) => {
   const [goToPageInput, setGoToPageInput] = useState("");
 
   const handleGoToPage = () => {
@@ -56,11 +56,15 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
   const pageNumbers = getPageNumbers();
 
   return (
-    <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center sm:justify-end gap-2 sm:gap-3 mt-3 sm:mt-4 font-montserrat text-xs sm:text-sm">
+    <div
+      className={`flex flex-row flex-nowrap items-center justify-end gap-1 sm:gap-2 lg:gap-3 font-montserrat text-xs sm:text-sm overflow-x-auto scrollbar-green ${
+        inFooter ? "" : "mt-3 sm:mt-4"
+      }`}
+    >
       <button
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage === 1}
-        className="p-2 text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+        className="p-2 text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition"
         aria-label="Previous page"
       >
         <ChevronLeft className="w-4 h-4" />
@@ -69,17 +73,17 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
       <div className="flex items-center gap-1">
         {pageNumbers.map((p, idx) =>
           p === "ellipsis" ? (
-            <span key={`ellipsis-${idx}`} className="px-2 text-gray-500">
+            <span key={`ellipsis-${idx}`} className="px-2 text-gray-500 dark:text-slate-400">
               ...
             </span>
           ) : (
             <button
               key={p}
               onClick={() => onPageChange(p)}
-              className={`min-w-[32px] h-8 px-2 rounded-md text-sm font-medium transition ${
+              className={`min-w-[28px] sm:min-w-[32px] h-7 sm:h-8 px-1.5 sm:px-2 rounded-md text-xs sm:text-sm font-medium transition ${
                 p === currentPage
                   ? "bg-emerald-500 text-white shadow-md hover:bg-emerald-600"
-                  : "text-gray-600 hover:bg-gray-100"
+                  : "text-gray-600 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-700"
               }`}
             >
               {p}
@@ -91,14 +95,14 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
       <button
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage === totalPages}
-        className="p-2 text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+        className="p-2 text-gray-500 hover:text-gray-700 dark:text-slate-400 dark:hover:text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed transition"
         aria-label="Next page"
       >
         <ChevronRight className="w-4 h-4" />
       </button>
 
-      <div className="flex items-center gap-2 ml-4 pl-4 border-l border-gray-200">
-        <span className="text-sm text-gray-500">Go to page</span>
+      <div className="flex items-center gap-1 sm:gap-2 ml-2 sm:ml-4 pl-2 sm:pl-4 border-l border-gray-200 dark:border-slate-700 whitespace-nowrap shrink-0">
+        <span className="text-[10px] sm:text-sm text-gray-500 dark:text-slate-400">Go to page</span>
         <input
           type="number"
           min={1}
@@ -107,11 +111,11 @@ const Pagination = ({ currentPage, totalPages, onPageChange }) => {
           onChange={(e) => setGoToPageInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleGoToPage()}
           placeholder=""
-          className="w-14 px-2 py-1.5 text-sm border border-gray-300 rounded focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-transparent"
+          className="w-11 sm:w-14 px-1.5 sm:px-2 py-1 text-[11px] sm:text-sm border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-transparent"
         />
         <button
           onClick={handleGoToPage}
-          className="px-3 py-1.5 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition"
+          className="px-2 sm:px-3 py-1 text-[11px] sm:text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600 transition"
         >
           Go
         </button>
@@ -157,8 +161,8 @@ const ActivityLogsPage = () => {
       const params = { page: p, limit };
       if (search) params.q = search;
       if (actionFilter) params.action = actionFilter;
-      if (startDate) params.startDate = startDate;
-      if (endDate) params.endDate = endDate;
+      if (startDate) params.from = startDate;
+      if (endDate) params.to = endDate;
       const res = await api.get(endpoints.activityLogs.getAll, { params });
       setRows(res.data.rows || []);
       setCount(res.data.count || 0);
@@ -210,17 +214,163 @@ const ActivityLogsPage = () => {
     return Math.max(4, Math.min(100, Math.round((value / counts.total) * 100)));
   };
 
-  const renderDescriptionPreview = (row) => {
-    let metadata = row.metadata;
+  const parseMetadata = (metadata) => {
+    if (!metadata) return null;
     if (typeof metadata === "string") {
       try {
-        metadata = JSON.parse(metadata);
+        return JSON.parse(metadata);
       } catch (e) {
-        metadata = null;
+        return null;
       }
     }
+    return metadata;
+  };
 
-    const description = row.description || metadata?.description;
+  const formatChangeValue = (value) => {
+    if (value === null || value === undefined) return "-";
+    if (Array.isArray(value)) return value.join(", ");
+    if (typeof value === "object") return JSON.stringify(value);
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (!trimmed) return "-";
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return parsed.join(", ");
+        if (typeof parsed === "object") return JSON.stringify(parsed);
+      } catch {
+        // keep original string
+      }
+      return trimmed;
+    }
+    return String(value);
+  };
+
+  const getLogUserLabel = (row) => {
+    const metadata = parseMetadata(row.metadata) || {};
+    if (row.user) {
+      const fullName = [row.user.firstName, row.user.lastName].filter(Boolean).join(" ");
+      return fullName || row.user.email || "System";
+    }
+
+    if (metadata.userName || metadata.createdUserName || metadata.updatedUserName || metadata.deletedUserName) {
+      return metadata.userName || metadata.createdUserName || metadata.updatedUserName || metadata.deletedUserName;
+    }
+    if (metadata.userEmail || metadata.deletedUserEmail) {
+      return metadata.userEmail || metadata.deletedUserEmail;
+    }
+    if (metadata.userId) {
+      return `User #${metadata.userId}`;
+    }
+    return "System";
+  };
+
+  const normalizeAction = (action) =>
+    (action || "").toLowerCase().replace(/[_-]/g, " ").trim();
+
+  const getActionBadgeConfig = (action, metadata) => {
+    const act = normalizeAction(action);
+    const isCompliance = metadata?.entity === "compliance";
+
+    if (act === "login") {
+      return {
+        label: "Login",
+        icon: <LogIn className="h-3.5 w-3.5" />,
+        className: "inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300",
+      };
+    }
+    if (act === "logout") {
+      return {
+        label: "Logout",
+        icon: <LogOut className="h-3.5 w-3.5" />,
+        className: "inline-flex items-center gap-2 rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 dark:bg-sky-500/10 dark:text-sky-300",
+      };
+    }
+    if (act === "login failed" || act === "failed login") {
+      return {
+        label: "Login Failed",
+        icon: <AlertCircle className="h-3.5 w-3.5" />,
+        className: "inline-flex items-center gap-2 rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 dark:bg-rose-500/10 dark:text-rose-300",
+      };
+    }
+    if (act === "create" || act === "create compliance") {
+      return {
+        label: isCompliance ? "Create Compliance" : "Create",
+        icon: <PlusCircle className="h-3.5 w-3.5" />,
+        className: "inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300",
+      };
+    }
+    if (act === "update" || act === "update compliance") {
+      return {
+        label: isCompliance ? "Update Compliance" : "Update",
+        icon: <PenSquare className="h-3.5 w-3.5" />,
+        className: "inline-flex items-center gap-2 rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 dark:bg-sky-500/10 dark:text-sky-300",
+      };
+    }
+    if (act === "assign") {
+      return {
+        label: "Assign Permission",
+        icon: <KeyRound className="h-3.5 w-3.5" />,
+        className: "inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300",
+      };
+    }
+    if (act === "remove") {
+      return {
+        label: "Remove Permission",
+        icon: <Trash2 className="h-3.5 w-3.5" />,
+        className: "inline-flex items-center gap-2 rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 dark:bg-rose-500/10 dark:text-rose-300",
+      };
+    }
+    if (act === "activate") {
+      return {
+        label: "Activate",
+        icon: <Power className="h-3.5 w-3.5" />,
+        className: "inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300",
+      };
+    }
+    if (act === "deactivate") {
+      return {
+        label: "Deactivate",
+        icon: <UserX className="h-3.5 w-3.5" />,
+        className: "inline-flex items-center gap-2 rounded-full bg-yellow-50 px-3 py-1 text-xs font-semibold text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-300",
+      };
+    }
+    if (act === "delete" || act.includes("delete compliance")) {
+      return {
+        label: isCompliance ? "Delete Compliance" : "Delete",
+        icon: <Trash2 className="h-3.5 w-3.5 text-rose-700 dark:text-rose-300" />,
+        className: "inline-flex items-center gap-2 rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 dark:bg-rose-500/10 dark:text-rose-300",
+      };
+    }
+    if (act === "password reset" || act === "passwordreset" || act === "password reset completed") {
+      return {
+        label: "Password Reset",
+        icon: <KeyRound className="h-3.5 w-3.5" />,
+        className: "inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-300",
+      };
+    }
+    if (act === "password reset requested" || act === "password resetrequest" || act === "passwordreset requested") {
+      return {
+        label: "Password Reset Requested",
+        icon: <KeyRound className="h-3.5 w-3.5" />,
+        className: "inline-flex items-center gap-2 rounded-full bg-yellow-50 px-3 py-1 text-xs font-semibold text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-300",
+      };
+    }
+
+    return {
+      label: action?.charAt(0).toUpperCase() + action?.slice(1) || "Activity",
+      icon: null,
+      className: "inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+    };
+  };
+
+  const renderDescriptionPreview = (row) => {
+    let metadata = parseMetadata(row.metadata);
+
+    const rawDescription = row.description || metadata?.description;
+    const description = rawDescription && metadata?.title
+      ? rawDescription.replace(/(compliance item:\s*)\d+$/i, `$1${metadata.title}`)
+      : rawDescription;
+
     if (description) {
       return description.length > 120 ? `${description.slice(0, 120)}…` : description;
     }
@@ -229,7 +379,7 @@ const ActivityLogsPage = () => {
     if (changes.length > 0) {
       const preview = changes
         .slice(0, 2)
-        .map((c) => `${c.field}: ${c.before ?? "-"} -> ${c.after ?? "-"}`)
+        .map((c) => `${c.field}: ${formatChangeValue(c.before)} -> ${formatChangeValue(c.after)}`)
         .join("; ");
       return preview.length > 120 ? `${preview.slice(0, 120)}…` : preview;
     }
@@ -239,7 +389,7 @@ const ActivityLogsPage = () => {
   };
 
   return (
-    <div className="rounded-lg p-6 select-none">
+    <div className="rounded-lg select-none">
       <div className="mb-6 flex flex-col gap-4 sm:gap-3 md:flex-row md:items-start md:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.35em] text-emerald-500">Activity Logs</p>
@@ -299,7 +449,7 @@ const ActivityLogsPage = () => {
 
           <div className="px-5 py-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm">
             <div className="flex items-center justify-between">
-              <div className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 whitespace-nowrap">Deletes</div>
+              <div className="text-xs font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-300 whitespace-nowrap">Deletes</div>
               <div className="flex h-7 w-7 items-center justify-center rounded-full bg-rose-50 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400">
                 <Trash2 className="h-3.5 w-3.5" />
               </div>
@@ -311,13 +461,18 @@ const ActivityLogsPage = () => {
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row flex-wrap gap-2 items-start sm:items-center sm:justify-end">
-          <div className="relative w-full sm:w-auto">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search..." className="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 pl-9 pr-3 py-2 text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500" />
+        <div className="flex flex-row flex-wrap gap-2 items-center justify-end">
+          <div className="relative" style={{minWidth: '150px'}}>
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search..."
+              className="w-full rounded-md border border-slate-200 bg-white pl-9 pr-3 py-2 text-xs sm:text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-emerald-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500"
+            />
           </div>
-          <div className="relative w-full sm:w-auto">
-            <select value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} className="w-full appearance-none rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 pl-3 pr-9 py-2 text-sm text-slate-900 dark:text-white">
+          <div className="relative" style={{minWidth: '120px'}}>
+            <select value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} className="w-full appearance-none rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 pl-3 pr-9 py-2 text-xs sm:text-sm text-slate-900 dark:text-white">
               <option value="">All actions</option>
               <option value="login">Login</option>
               <option value="logout">Logout</option>
@@ -330,10 +485,10 @@ const ActivityLogsPage = () => {
             <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
           </div>
 
-          <div className="relative w-full sm:w-auto" ref={dateFilterRef}>
+          <div className="relative" style={{minWidth: '140px'}} ref={dateFilterRef}>
             <button
               onClick={() => setShowDateFilter((v) => !v)}
-              className="w-full inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+              className="w-full inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs sm:text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
             >
               <Calendar className="w-4 h-4 text-slate-500 dark:text-slate-400" />
               {startDate || endDate ? (
@@ -386,167 +541,99 @@ const ActivityLogsPage = () => {
             )}
           </div>
 
-          <button onClick={() => { fetchLogs(1); fetchCounts(); }} className="w-full sm:w-auto rounded-lg bg-slate-100 dark:bg-slate-800 px-3 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700">Apply</button>
+          <button onClick={() => { fetchLogs(1); fetchCounts(); }} className="flex-shrink-0 rounded-lg bg-slate-100 dark:bg-slate-800 px-3 py-2 text-xs sm:text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700">Apply</button>
         </div>
       </div>
 
-      <div className="overflow-x-auto scrollbar-green">
-        <table className="min-w-full text-sm bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
-          <thead>
-            <tr className="bg-slate-50 dark:bg-slate-950 text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
-              <th className="px-5 py-3 text-left">Date/Time</th>
-              <th className="px-5 py-3 text-left">User</th>
-              <th className="px-5 py-3 text-left">Action</th>
-              <th className="px-5 py-3 text-left">Description</th>
-              <th className="px-5 py-3 text-center">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {loading ? (
-              <tr>
-                <td colSpan={5} className="text-center py-12 text-slate-400 dark:text-slate-500">Loading activity logs…</td>
+      <div className="rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto scrollbar-green">
+          <table className="min-w-full text-sm bg-white dark:bg-slate-900">
+            <thead>
+              <tr className="bg-slate-50 dark:bg-slate-950/20 text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
+                <th className="px-5 py-3 text-left whitespace-nowrap">Date/Time</th>
+                <th className="px-5 py-3 text-left whitespace-nowrap">User</th>
+                <th className="px-5 py-3 text-left whitespace-nowrap">Action</th>
+                <th className="px-5 py-3 text-left">Description</th>
+                <th className="px-5 py-3 text-center whitespace-nowrap">Actions</th>
               </tr>
-            ) : rows.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="text-center py-12 text-slate-400 dark:text-slate-500">No activity logs found.</td>
-              </tr>
-            ) : (
-              rows.map((r) => (
-                <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors">
-                  <td className="px-5 py-3.5 font-medium text-slate-600 dark:text-slate-300 align-top whitespace-normal break-words sm:whitespace-nowrap">
-                    {new Date(r.createdAt).toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "numeric" })}
-                  </td>
-                  <td className="px-5 py-3.5 font-medium text-slate-700 dark:text-slate-200 align-top whitespace-normal break-words">
-                    <div className="break-words">{r.user ? `${r.user.firstName} ${r.user.lastName}` : "System"}</div>
-                    <div className="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400 break-words">{r.user?.email || "—"}</div>
-                  </td>
-                  <td className="px-5 py-3.5 align-top whitespace-normal break-words sm:whitespace-nowrap">
-                    {(() => {
-                      const act = (r.action || "").toLowerCase();
-                      if (act === "login") {
-                        return (
-                          <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
-                            <LogIn className="h-3.5 w-3.5" />
-                            Login
-                          </span>
-                        );
-                      }
-                      if (act === "logout") {
-                        return (
-                          <span className="inline-flex items-center gap-2 rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 dark:bg-sky-500/10 dark:text-sky-300">
-                            <LogOut className="h-3.5 w-3.5" />
-                            Logout
-                          </span>
-                        );
-                      }
-                      if (act === "login_failed" || act === "login-failed" || act === "failed_login") {
-                        return (
-                          <span className="inline-flex items-center gap-2 rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
-                            <AlertCircle className="h-3.5 w-3.5" />
-                            Login Failed
-                          </span>
-                        );
-                      }
-                      if (act === "create") {
-                        return (
-                          <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
-                            <PlusCircle className="h-3.5 w-3.5" />
-                            Create
-                          </span>
-                        );
-                      }
-                      if (act === "update") {
-                        return (
-                          <span className="inline-flex items-center gap-2 rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 dark:bg-sky-500/10 dark:text-sky-300">
-                            <PenSquare className="h-3.5 w-3.5" />
-                            Update
-                          </span>
-                        );
-                      }
-                      if (act === "assign") {
-                        return (
-                          <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
-                            <KeyRound className="h-3.5 w-3.5" />
-                            Assign Permission
-                          </span>
-                        );
-                      }
-                      if (act === "remove") {
-                        return (
-                          <span className="inline-flex items-center gap-2 rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
-                            <Trash2 className="h-3.5 w-3.5" />
-                            Remove Permission
-                          </span>
-                        );
-                      }
-                      if (act === "activate") {
-                        return (
-                          <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
-                            <Power className="h-3.5 w-3.5" />
-                            Activate
-                          </span>
-                        );
-                      }
-                      if (act === "deactivate") {
-                        return (
-                          <span className="inline-flex items-center gap-2 rounded-full bg-yellow-50 px-3 py-1 text-xs font-semibold text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-300">
-                            <UserX className="h-3.5 w-3.5" />
-                            Deactivate
-                          </span>
-                        );
-                      }
-                      if (act === "delete") {
-                        return (
-                          <span className="inline-flex items-center gap-2 rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">
-                            <Trash2 className="h-3.5 w-3.5" />
-                            Delete
-                          </span>
-                        );
-                      }
-
-                      // Password reset actions
-                      if (act === "password_reset" || act === "passwordreset" || act === "password_reset_completed") {
-                        return (
-                          <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
-                            <KeyRound className="h-3.5 w-3.5" />
-                            Password Reset
-                          </span>
-                        );
-                      }
-                      if (act === "password_reset_requested" || act === "password_resetrequest" || act === "passwordreset_requested") {
-                        return (
-                          <span className="inline-flex items-center gap-2 rounded-full bg-yellow-50 px-3 py-1 text-xs font-semibold text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-300">
-                            <KeyRound className="h-3.5 w-3.5" />
-                            Password Reset Requested
-                          </span>
-                        );
-                      }
-
-                      return (
-                        <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                          {r.action?.charAt(0).toUpperCase() + r.action?.slice(1)}
-                        </span>
-                      );
-                    })()}
-                  </td>
-                  <td className="px-5 py-3.5 text-slate-600 dark:text-slate-300 align-top whitespace-normal break-words">{renderDescriptionPreview(r)}</td>
-                  <td className="px-5 py-3.5 text-center whitespace-nowrap">
-                    <button className="rounded-lg px-3 py-1 text-sm font-medium text-blue-600 dark:text-blue-400 transition hover:bg-slate-100 dark:hover:bg-slate-700" onClick={() => setSelected(r)}>
-                      View
-                    </button>
-                  </td>
+            </thead>
+            <tbody className="bg-white dark:bg-slate-800/40 divide-y divide-slate-200 dark:divide-slate-700">
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="text-center py-12 text-xs sm:text-sm text-slate-400 dark:text-slate-500">Loading activity logs…</td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              ) : rows.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="text-center py-12 text-xs sm:text-sm text-slate-400 dark:text-slate-500">No activity logs found.</td>
+                </tr>
+              ) : (
+                rows.map((r) => {
+                  const descriptionPreview = renderDescriptionPreview(r);
 
-      <Pagination
-        currentPage={page}
-        totalPages={Math.max(1, Math.ceil(count / limit))}
-        onPageChange={fetchLogs}
-      />
+                  return (
+                  <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors">
+                    <td className="px-5 py-3.5 font-medium text-xs sm:text-sm text-slate-600 dark:text-slate-300 align-top whitespace-nowrap">
+                      {new Date(r.createdAt).toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "numeric" })}
+                    </td>
+                    <td className="px-5 py-3.5 font-medium text-xs sm:text-sm text-slate-700 dark:text-slate-200 align-top">
+                      <div>{getLogUserLabel(r)}</div>
+                      <div className="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400 truncate">{r.user?.email || parseMetadata(r.metadata)?.userEmail || parseMetadata(r.metadata)?.deletedUserEmail || "—"}</div>
+                    </td>
+                    <td className="px-5 py-3.5 align-top whitespace-nowrap">
+                      {(() => {
+                        const badge = getActionBadgeConfig(r.action, parseMetadata(r.metadata));
+                        return (
+                          <span className={badge.className}>
+                            {badge.icon}
+                            {badge.label}
+                          </span>
+                        );
+                      })()}
+                    </td>
+                    <td className="px-5 py-3.5 text-xs sm:text-sm text-slate-600 dark:text-slate-300 align-top">
+                      <span
+                        className="block max-w-[260px] truncate md:max-w-[360px] lg:max-w-[460px]"
+                        title={descriptionPreview}
+                      >
+                        {descriptionPreview}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5 text-center whitespace-nowrap">
+                      <button className="rounded-lg px-3 py-1 text-xs sm:text-sm font-medium text-blue-600 dark:text-blue-400 transition hover:bg-slate-100 dark:hover:bg-slate-700" onClick={() => setSelected(r)}>
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                  );
+                })
+              )}
+            </tbody>
+            <tfoot className="border-t border-slate-200 bg-slate-50/80 dark:border-slate-700 dark:bg-slate-950/30">
+              <tr>
+                <td colSpan={5} className="px-5 py-3">
+                  <div className="flex flex-row items-center justify-between gap-3">
+                    <div className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap\">
+                      {loading ? (
+                        "Loading records..."
+                      ) : (
+                        <span>
+                          Showing {count === 0 ? 0 : (page - 1) * limit + 1}-{Math.min(page * limit, count)} of {count} records
+                        </span>
+                      )}
+                    </div>
+                    <Pagination
+                      currentPage={page}
+                      totalPages={Math.max(1, Math.ceil(count / limit))}
+                      onPageChange={fetchLogs}
+                      inFooter={true}
+                    />
+                  </div>
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
 
       {selected && (
         <ActivityLogDetailsModal log={selected} onClose={() => setSelected(null)} />

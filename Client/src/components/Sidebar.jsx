@@ -35,22 +35,22 @@ const Sidebar = ({ children, isCollapsed, onBackdropClick }) => {
 
   return (
     <>
-      {!isCollapsed && (
-        <div
-          className="fixed inset-0 z-30 bg-slate-900/40 sm:hidden pointer-events-none"
-        />
-      )}
+      <div
+        className={`fixed inset-0 z-30 bg-slate-900/40 sm:hidden transition-opacity duration-300 ${
+          isCollapsed ? "pointer-events-none opacity-0" : "pointer-events-auto opacity-100"
+        }`}
+      />
 
       <aside
         ref={sidebarRef}
-        className={`fixed top-0 left-0 h-screen z-40 bg-white dark:bg-slate-900 
+        className={`fixed top-0 left-0 h-screen z-40 overflow-y-auto overflow-x-hidden bg-white dark:bg-slate-900 
                     border-r border-slate-200 dark:border-slate-800 
-                    shadow-xl select-none transition-all duration-300 ease-in-out 
-                    ${isCollapsed ? "w-16" : "w-72"}`}
+                    shadow-xl select-none transition-all duration-300 ease-in-out
+                    ${isCollapsed ? "w-0 -translate-x-full opacity-0 lg:w-16 lg:translate-x-0 lg:opacity-100" : "w-72 translate-x-0 opacity-100"}`}
       >
         <nav className="h-full flex flex-col">
           <SidebarContext.Provider value={contextValue}>
-            <ul className="flex-1 px-2 sm:px-3 pt-20">{children}</ul>
+            <ul className="flex-1 px-2 sm:px-3 pt-20 pb-6">{children}</ul>
           </SidebarContext.Provider>
         </nav>
       </aside>
@@ -65,6 +65,7 @@ export function SidebarItem({
   notification,
   notificationCount,
   notificationColor = "bg-green-500",
+  notificationSide = "right",
   onClick,
   dropdownIcon,
   children,
@@ -74,6 +75,14 @@ export function SidebarItem({
   const { expandedItems, toggleExpanded, isCollapsed } =
     useContext(SidebarContext);
   const isExpanded = expandedItems[itemId] || false;
+  const expandedBadgePositionClass =
+    notificationSide === "left"
+      ? "left-2 top-1/2 -translate-y-1/2"
+      : notificationSide === "upper-right"
+        ? "right-2 top-1"
+        : "right-2 top-1/2 -translate-y-1/2";
+  const collapsedBadgePositionClass =
+    notificationSide === "left" ? "-top-1 -left-1" : "-top-1 -right-1";
 
   const handleClick = () => {
     if (expandable && itemId && !isCollapsed) {
@@ -127,33 +136,39 @@ export function SidebarItem({
 
         {/* Notification - Expanded */}
         {notification && !isCollapsed && (
-          <div className="absolute right-2 flex items-center">
+          <div className={`absolute ${expandedBadgePositionClass} flex items-center`}>
             <span
-              className={`w-3 h-3 rounded-full ${notificationColor} animate-pulse`}
-            ></span>
-            {notificationCount > 0 && (
-              <span
-                className={`ml-1 text-xs bg-green-500 text-white rounded-full px-1.5 py-0.5`}
-              >
-                {notificationCount}
-              </span>
-            )}
+              className={`inline-flex items-center justify-center rounded-full ${notificationColor} text-white text-[10px] font-semibold transition-all duration-200 ${
+                notificationCount > 0
+                  ? "min-w-[18px] h-5 px-1"
+                  : "w-3 h-3"
+              }`}
+            >
+              {notificationCount > 0
+                ? notificationCount > 99
+                  ? "99+"
+                  : notificationCount
+                : ""}
+            </span>
           </div>
         )}
 
         {/* Notification - Collapsed */}
         {notification && isCollapsed && (
-          <div className="absolute -top-1 -right-1">
+          <div className={`absolute ${collapsedBadgePositionClass}`}>
             <span
-              className={`w-3 h-3 rounded-full ${notificationColor} animate-pulse`}
-            ></span>
-            {notificationCount > 0 && (
-              <span
-                className={`absolute -top-1 -right-1 text-xs bg-green-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px]`}
-              >
-                {notificationCount}
-              </span>
-            )}
+              className={`inline-flex items-center justify-center rounded-full ${notificationColor} text-white text-[10px] font-semibold transition-all duration-200 ${
+                notificationCount > 0
+                  ? "min-w-[18px] h-5 px-1"
+                  : "w-3 h-3"
+              }`}
+            >
+              {notificationCount > 0
+                ? notificationCount > 99
+                  ? "99+"
+                  : notificationCount
+                : ""}
+            </span>
           </div>
         )}
       </div>

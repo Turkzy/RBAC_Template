@@ -3,9 +3,9 @@ import axios from "axios";
 // LOCALHOST API URL
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5004/api";
 // PRODUCTION API URL
-//const API_BASE_URL = import.meta.env.VITE_API_URL || "http://202.90.138.42:5002/api";
-//const API_BASE_URL = import.meta.env.VITE_API_URL || "http://192.168.1.102:5002/api";
-//const API_BASE_URL = import.meta.env.VITE_API_URL || "http://fms.ndc.gov.ph:5002/api";
+//const API_BASE_URL = import.meta.env.VITE_API_URL || "http://202.90.138.42:5004/api";
+//const API_BASE_URL = import.meta.env.VITE_API_URL || "http://192.168.1.102:5004/api";
+//const API_BASE_URL = import.meta.env.VITE_API_URL || "http://fms.ndc.gov.ph:5004/api";
 
 const FILE_BASE_URL = API_BASE_URL.replace(/\/api\/?$/, "");
 
@@ -72,26 +72,81 @@ const endpoints = {
 
     workgroups: {
         getAll: "/workgroups/get-workgroups",
+        create: "/workgroups/create-workgroup",
+        update: (id) => `/workgroups/update-workgroup/${id}`,
+        delete: (id) => `/workgroups/delete-workgroup/${id}`,
     },
 
     units: {
         getAll: "/units/get-units",
+        create: "/units/create-unit",
+        update: (id) => `/units/update-unit/${id}`,
+        delete: (id) => `/units/delete-unit/${id}`,
     },
 
     departments: {
         getAll: "/departments/get-departments",
+        create: "/departments/create-department",
+        update: (id) => `/departments/update-department/${id}`,
+        delete: (id) => `/departments/delete-department/${id}`,
     },
 
     activityLogs: {
         getAll: "/activity-logs",
+        getById: (id) => `/activity-logs/${id}`,
         retention: "/activity-logs/retention",
     },
+
+
 
     compliance: {
         list: "/compliance",
         create: "/compliance",
         update: (id) => `/compliance/${id}`,
-        delete: (id) => `/compliance/${id}`,
+        getById: (id) => `/compliance/${id}`,
+    delete: (id) => `/compliance/${id}`,
+        download: (id) => `/compliance/${id}/download`,
+        markRead: (id) => `/compliance/${id}/mark-read`,
+        deleteNotification: (id) => `/compliance/${id}/notification`,
+        deleteNotificationPermanent: (id) => `/compliance/${id}/notification/permanent`,
+        notificationRecords: `/compliance/notifications`,
+        restoreNotification: (id) => `/compliance/${id}/notification/restore`,
+        markAllRead: "/compliance/mark-all-read",
+    },
+
+    complianceForms: {
+        titles: {
+            getAll: "/compliance-forms/titles",
+            getById: (id) => `/compliance-forms/titles/${id}`,
+            create: "/compliance-forms/titles",
+            update: (id) => `/compliance-forms/titles/${id}`,
+            delete: (id) => `/compliance-forms/titles/${id}`,
+        },
+        forms: {
+            getAll: "/compliance-forms/forms",
+            getById: (id) => `/compliance-forms/forms/${id}`,
+            create: "/compliance-forms/forms",
+            update: (id) => `/compliance-forms/forms/${id}`,
+
+            delete: (id) => `/compliance-forms/forms/${id}`,
+        },
+        subforms: {
+            getAll: "/compliance-forms/subforms",
+            getById: (id) => `/compliance-forms/subforms/${id}`,
+            create: "/compliance-forms/subforms",
+            update: (id) => `/compliance-forms/subforms/${id}`,
+            delete: (id) => `/compliance-forms/subforms/${id}`,
+        },
+    },
+
+    notificationRules: {
+        getAll: "/notification-rules",
+        update: (id) => `/notification-rules/${id}`,
+    },
+
+    systemSettings: {
+        get: (key) => `/system-settings/${key}`,
+        upsert: "/system-settings",
     },
 }
 

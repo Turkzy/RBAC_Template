@@ -57,30 +57,42 @@ const ActivityLogSettingsModal = ({ open, onClose, onRetentionApply }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-3 sm:p-4">
-      <div className="w-full max-w-sm sm:max-w-md rounded-lg bg-white dark:bg-slate-900 shadow-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
-        <div className="px-6 py-4">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Activity Log Settings</h3>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Configure log retention and cleanup</p>
+      <div className="w-full max-w-sm sm:max-w-md max-h-[90vh] flex flex-col rounded-lg bg-white dark:bg-slate-900 shadow-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div className="px-4 sm:px-6 py-4 shrink-0">
+          <h3 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-white">Activity Log Settings</h3>
+          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">Configure log retention and cleanup</p>
         </div>
-        
-        <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
+
+        <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-800 space-y-3 overflow-y-auto">
           <div>
             <label className="text-sm text-slate-600 dark:text-slate-300 font-medium">Retention Period (Months)</label>
-            <input 
-              type="number" 
-              min={1} 
-              value={months} 
-              onChange={(e) => setMonths(parseInt(e.target.value || "1", 10))} 
-              className="mt-2 block w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-slate-900 dark:text-white" 
+            <input
+              type="number"
+              min={1}
+              value={months}
+              onChange={(e) => setMonths(parseInt(e.target.value || "1", 10))}
+              className="mt-2 block w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2.5 sm:py-2 text-base sm:text-sm text-slate-900 dark:text-white"
               disabled={loading}
             />
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">Logs older than {months} month{months !== 1 ? 's' : ''} will be deleted</p>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-2 break-words">Logs older than {months} month{months !== 1 ? 's' : ''} will be deleted</p>
           </div>
         </div>
 
-        <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 flex gap-3 justify-end">
-          <button onClick={onClose} className="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700" disabled={loading}>Cancel</button>
-          <button onClick={save} className="rounded-md bg-emerald-600 text-white px-4 py-2 text-sm hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700 disabled:opacity-50" disabled={loading}>Save & Clean</button>
+        <div className="px-4 sm:px-6 py-4 border-t border-slate-100 dark:border-slate-800 flex flex-col-reverse gap-2 sm:flex-row sm:gap-3 sm:justify-end shrink-0">
+          <button
+            onClick={onClose}
+            className="w-full sm:w-auto rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+            disabled={loading}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={save}
+            className="w-full sm:w-auto rounded-md bg-emerald-600 text-white px-4 py-2 text-sm hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700 disabled:opacity-50"
+            disabled={loading}
+          >
+            Save & Clean
+          </button>
         </div>
       </div>
     </div>

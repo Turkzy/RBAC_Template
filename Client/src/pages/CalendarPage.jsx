@@ -1,38 +1,79 @@
-import React, { useEffect, useState } from "react";
-import {
-  ChevronLeft,
-  ChevronRight,
-  Search,
-  Calendar,
-  X,
-} from "lucide-react";
+import React, { useEffect, useState, useRef } from "react";
+import { useAuth } from "../context/AuthContext.jsx";
+import { useLocation } from "react-router-dom";
+import { PERMISSIONS } from "../utils/permissions";
+import { ChevronDown, X, Download, Eye, File } from "lucide-react";
 import CalendarFormModal from "../components/CalendarFormModal";
+import CalendarHeader from "../components/CalendarHeader";
+import DayListModal from "../components/DayListModal";
+import EventDetailsModal from "../components/EventDetailsModal";
 import SweetAlert from "../components/SweetAlert";
 import api, { endpoints } from "../config/api";
 
 const CalendarPage = () => {
-  const [currentDate, setCurrentDate] = useState(new Date(2026, 6, 8)); // July 8, 2026
+  const normalizeComplianceStatusValue = (value) => {
+    const normalized = String(value || "")
+      .trim()
+      .toLowerCase();
+    if (normalized === "compliant") return "Compliant";
+    if (normalized === "under evaluation" || normalized === "in progress")
+      return "Under Evaluation";
+    if (normalized === "no submission" || normalized === "pending")
+      return "No Submission";
+    if (normalized === "non-compliant" || normalized === "non compliant")
+      return "Non-Compliant";
+    if (normalized === "not applicable") return "Not Applicable";
+    return "No Submission";
+  };
+
+  const [currentDate, setCurrentDate] = useState(() => new Date());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [viewMode, setViewMode] = useState("Month");
   const [complianceItems, setComplianceItems] = useState([]);
+  const [complianceFormTitles, setComplianceFormTitles] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [workgroups, setWorkgroups] = useState([]);
+  const [departments, setDepartments] = useState([]);
+  const [pendingOpenComplianceId, setPendingOpenComplianceId] = useState(null);
+  const location = useLocation();
+  const [units, setUnits] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     title: "",
     startDate: "",
     endDate: "",
-    description: "",
-    complianceType: "Audit",
-    assigned: "",
-    status: "Pending",
+    complianceType: "",
+    complianceTitleId: "",
+    complianceFormId: "",
+    assignedToUserIds: [],
+    assignedToWorkgroupIds: [],
+    assignedToDepartmentIds: [],
+    assignedToUnitsIds: [],
+    status: "No Submission",
     colorIndex: 0,
   });
   const [dayListOpen, setDayListOpen] = useState(false);
   const [dayListDate, setDayListDate] = useState(null);
   const [dayListEvents, setDayListEvents] = useState([]);
   const [editingItemId, setEditingItemId] = useState(null);
+  const [assignedDropdownOpen, setAssignedDropdownOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const assignedDetailsRef = useRef(null);
+  const { user, hasPermission } = useAuth();
+
+  const isCreator = (it) => {
+    if (!user) return false;
+    if (it?.creator?.id) return Number(it.creator.id) === Number(user.id);
+    if (it?.createdBy) return Number(it.createdBy) === Number(user.id);
+    return false;
+  };
+
+  const canModify = (it) =>
+    isCreator(it) || hasPermission(PERMISSIONS.CALENDAR_MANAGE_OTHERS);
 
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const today = new Date();
@@ -72,96 +113,166 @@ const CalendarPage = () => {
     (_, i) => i + 1,
   );
 
-// Unified day list for the month grid, chunked into week rows
-const monthGridDays = [
-  ...prevMonthDays.map((day) => ({
-    date: new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, day),
-    day,
-    isCurrentMonth: false,
-  })),
-  ...currentMonthDays.map((day) => ({
-    date: new Date(currentDate.getFullYear(), currentDate.getMonth(), day),
-    day,
-    isCurrentMonth: true,
-  })),
-  ...nextMonthDays.map((day) => ({
-    date: new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, day),
-    day,
-    isCurrentMonth: false,
-  })),
-];
+  // Unified day list for the month grid, chunked into week rows
+  const monthGridDays = [
+    ...prevMonthDays.map((day) => ({
+      date: new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth() - 1,
+        day,
+      ),
+      day,
+      isCurrentMonth: false,
+    })),
+    ...currentMonthDays.map((day) => ({
+      date: new Date(currentDate.getFullYear(), currentDate.getMonth(), day),
+      day,
+      isCurrentMonth: true,
+    })),
+    ...nextMonthDays.map((day) => ({
+      date: new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth() + 1,
+        day,
+      ),
+      day,
+      isCurrentMonth: false,
+    })),
+  ];
 
-const monthWeeks = [];
-for (let i = 0; i < monthGridDays.length; i += 7) {
-  monthWeeks.push(monthGridDays.slice(i, i + 7));
-}
+  const monthWeeks = [];
+  for (let i = 0; i < monthGridDays.length; i += 7) {
+    monthWeeks.push(monthGridDays.slice(i, i + 7));
+  }
 
-const MAX_VISIBLE_LANES = 3;
-const LANE_HEIGHT_PX = 22;
-const LANE_GAP_PX = 3;
+  const MAX_VISIBLE_LANES = 3;
+  const LANE_HEIGHT_PX = 22;
+  const LANE_GAP_PX = 3;
 
-// Builds merged event bars (with lane assignment) for a single week row
-const getWeekEventSegments = (weekCells) => {
-  const normalizedCells = weekCells.map((cell) => (cell && cell.date ? cell.date : cell));
-  const weekStart = normalizedCells[0];
-  const weekEnd = normalizedCells[normalizedCells.length - 1];
-  const normStart = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate());
-  const normEnd = new Date(weekEnd.getFullYear(), weekEnd.getMonth(), weekEnd.getDate());
+  // Determine which compliance items are visible to the current user
+  const isItemVisibleToUser = (item) => {
+    if (!item) return false;
+    // admins or users with override permission can see everything
+    if (hasPermission && hasPermission(PERMISSIONS.CALENDAR_MANAGE_OTHERS)) return true;
 
-  const segments = complianceItems
-    .map((item) => {
-      const rawStart = new Date(item.startDate);
-      const rawEnd = new Date(item.endDate);
-      const itemStart = new Date(rawStart.getFullYear(), rawStart.getMonth(), rawStart.getDate());
-      const itemEnd = new Date(rawEnd.getFullYear(), rawEnd.getMonth(), rawEnd.getDate());
+    const currentUserId = Number(user?.id || 0);
+    if (!currentUserId) return false;
 
-      if (itemEnd < normStart || itemStart > normEnd) return null;
+    const matchArray = (values) =>
+      Array.isArray(values) && values.some((id) => Number(id) === currentUserId);
 
-      const segStart = itemStart < normStart ? normStart : itemStart;
-      const segEnd = itemEnd > normEnd ? normEnd : itemEnd;
+    if (Number(item?.assignedToUserId) === currentUserId) return true;
+    if (matchArray(item?.assignedToUserIds)) return true;
+    if (Number(item?.createdBy) === currentUserId) return true;
+    if (Number(item?.submittedBy) === currentUserId) return true;
 
-      const startCol = Math.round((segStart - normStart) / 86400000);
-      const endCol = Math.round((segEnd - normStart) / 86400000);
+    // check workgroup / department / unit membership against requester
+    const userWorkgroupId = Number(user?.workgroupId || 0);
+    const userDepartmentId = Number(user?.DepartmentId || 0);
+    const userUnitsId = Number(user?.unitsId || 0);
 
-      return {
-        item,
-        startCol,
-        endCol,
-        continuesBefore: itemStart < segStart,
-        continuesAfter: itemEnd > segEnd,
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => a.startCol - b.startCol || b.endCol - a.endCol);
-
-  // Assign lanes so overlapping bars don't collide
-  const laneEnds = [];
-  segments.forEach((seg) => {
-    let lane = laneEnds.findIndex((occupiedEnd) => seg.startCol > occupiedEnd);
-    if (lane === -1) {
-      lane = laneEnds.length;
-      laneEnds.push(seg.endCol);
-    } else {
-      laneEnds[lane] = seg.endCol;
+    if (userWorkgroupId) {
+      if (Number(item?.assignedToWorkgroupId) === userWorkgroupId) return true;
+      if (Array.isArray(item?.assignedToWorkgroupIds) && item.assignedToWorkgroupIds.some((id) => Number(id) === userWorkgroupId)) return true;
     }
-    seg.lane = lane;
-  });
-
-  // Per-day counts of overflow bars, for "+N more"
-  const hiddenPerDay = Array(7).fill(0);
-  segments.forEach((seg) => {
-    if (seg.lane >= MAX_VISIBLE_LANES) {
-      for (let col = seg.startCol; col <= seg.endCol; col += 1) {
-        hiddenPerDay[col] += 1;
-      }
+    if (userDepartmentId) {
+      if (Number(item?.assignedToDepartmentId) === userDepartmentId) return true;
+      if (Array.isArray(item?.assignedToDepartmentIds) && item.assignedToDepartmentIds.some((id) => Number(id) === userDepartmentId)) return true;
     }
-  });
+    if (userUnitsId) {
+      if (Number(item?.assignedToUnitsId) === userUnitsId) return true;
+      if (Array.isArray(item?.assignedToUnitsIds) && item.assignedToUnitsIds.some((id) => Number(id) === userUnitsId)) return true;
+    }
 
-  return {
-    visibleSegments: segments.filter((seg) => seg.lane < MAX_VISIBLE_LANES),
-    hiddenPerDay,
+    return false;
   };
-};
+
+  const visibleComplianceItems = React.useMemo(() => {
+    return (complianceItems || []).filter((it) => isItemVisibleToUser(it));
+  }, [complianceItems, user]);
+
+  // Builds merged event bars (with lane assignment) for a single week row
+  const getWeekEventSegments = (weekCells) => {
+    const normalizedCells = weekCells.map((cell) =>
+      cell && cell.date ? cell.date : cell,
+    );
+    const weekStart = normalizedCells[0];
+    const weekEnd = normalizedCells[normalizedCells.length - 1];
+    const normStart = new Date(
+      weekStart.getFullYear(),
+      weekStart.getMonth(),
+      weekStart.getDate(),
+    );
+    const normEnd = new Date(
+      weekEnd.getFullYear(),
+      weekEnd.getMonth(),
+      weekEnd.getDate(),
+    );
+
+    const segments = visibleComplianceItems
+      .map((item) => {
+        const rawStart = new Date(item.startDate);
+        const rawEnd = new Date(item.endDate);
+        const itemStart = new Date(
+          rawStart.getFullYear(),
+          rawStart.getMonth(),
+          rawStart.getDate(),
+        );
+        const itemEnd = new Date(
+          rawEnd.getFullYear(),
+          rawEnd.getMonth(),
+          rawEnd.getDate(),
+        );
+
+        if (itemEnd < normStart || itemStart > normEnd) return null;
+
+        const segStart = itemStart < normStart ? normStart : itemStart;
+        const segEnd = itemEnd > normEnd ? normEnd : itemEnd;
+
+        const startCol = Math.round((segStart - normStart) / 86400000);
+        const endCol = Math.round((segEnd - normStart) / 86400000);
+
+        return {
+          item,
+          startCol,
+          endCol,
+          continuesBefore: itemStart < segStart,
+          continuesAfter: itemEnd > segEnd,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.startCol - b.startCol || b.endCol - a.endCol);
+
+    // Assign lanes so overlapping bars don't collide
+    const laneEnds = [];
+    segments.forEach((seg) => {
+      let lane = laneEnds.findIndex(
+        (occupiedEnd) => seg.startCol > occupiedEnd,
+      );
+      if (lane === -1) {
+        lane = laneEnds.length;
+        laneEnds.push(seg.endCol);
+      } else {
+        laneEnds[lane] = seg.endCol;
+      }
+      seg.lane = lane;
+    });
+
+    // Per-day counts of overflow bars, for "+N more"
+    const hiddenPerDay = Array(7).fill(0);
+    segments.forEach((seg) => {
+      if (seg.lane >= MAX_VISIBLE_LANES) {
+        for (let col = seg.startCol; col <= seg.endCol; col += 1) {
+          hiddenPerDay[col] += 1;
+        }
+      }
+    });
+
+    return {
+      visibleSegments: segments.filter((seg) => seg.lane < MAX_VISIBLE_LANES),
+      hiddenPerDay,
+    };
+  };
 
   const handlePrev = () => {
     if (viewMode === "Week") {
@@ -236,8 +347,14 @@ const getWeekEventSegments = (weekCells) => {
   };
 
   const weekStart = getWeekStart(currentDate);
-  const weekDays = Array.from({ length: 7 }, (_, i) =>
-    new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + i),
+  const weekDays = Array.from(
+    { length: 7 },
+    (_, i) =>
+      new Date(
+        weekStart.getFullYear(),
+        weekStart.getMonth(),
+        weekStart.getDate() + i,
+      ),
   );
 
   const getViewDateRange = () => {
@@ -270,8 +387,16 @@ const getWeekEventSegments = (weekCells) => {
       };
     }
 
-    const firstDay = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-    const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+    const firstDay = new Date(
+      currentDate.getFullYear(),
+      currentDate.getMonth(),
+      1,
+    );
+    const lastDay = new Date(
+      currentDate.getFullYear(),
+      currentDate.getMonth() + 1,
+      0,
+    );
     return {
       start: firstDay.toLocaleDateString("en-US", {
         year: "numeric",
@@ -291,17 +416,17 @@ const getWeekEventSegments = (weekCells) => {
     viewMode === "Month"
       ? monthName
       : viewMode === "Week"
-      ? `Week of ${weekStart.toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        })}`
-      : currentDate.toLocaleDateString("en-US", {
-          weekday: "long",
-          month: "long",
-          day: "numeric",
-          year: "numeric",
-        });
+        ? `Week of ${weekStart.toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          })}`
+        : currentDate.toLocaleDateString("en-US", {
+            weekday: "long",
+            month: "long",
+            day: "numeric",
+            year: "numeric",
+          });
 
   const formatDateTimeValue = (date) => {
     const year = date.getFullYear();
@@ -316,10 +441,360 @@ const getWeekEventSegments = (weekCells) => {
     if (!dateStr) return "";
     try {
       const d = new Date(dateStr);
-      return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+      return d.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+      });
     } catch (e) {
       return "";
     }
+  };
+
+  const getUserLabel = (id, complianceItem) => {
+    if (!id) return "N/A";
+
+    if (complianceItem?.assignedUsers?.length) {
+      const match = complianceItem.assignedUsers.find(
+        (user) => Number(user.id) === Number(id),
+      );
+      if (match) {
+        const name = [
+          match.fullName,
+          [match.firstName, match.middleName, match.lastName]
+            .filter(Boolean)
+            .join(" "),
+        ]
+          .flat()
+          .filter(Boolean)[0];
+        return name || match.username || match.email || `User #${id}`;
+      }
+    }
+
+    if (complianceItem?.assignedUser?.id === Number(id)) {
+      const user = complianceItem.assignedUser;
+      return (
+        [user.firstName, user.middleName, user.lastName]
+          .filter(Boolean)
+          .join(" ") ||
+        user.username ||
+        user.email ||
+        `User #${id}`
+      );
+    }
+
+    if (complianceItem?.creator?.id === Number(id)) {
+      const user = complianceItem.creator;
+      return (
+        [user.firstName, user.middleName, user.lastName]
+          .filter(Boolean)
+          .join(" ") ||
+        user.username ||
+        user.email ||
+        `User #${id}`
+      );
+    }
+
+    const match = users.find((item) => Number(item.id) === Number(id));
+    if (match) {
+      return (
+        match.fullName ||
+        [match.firstName, match.middleName, match.lastName]
+          .filter(Boolean)
+          .join(" ") ||
+        match.username ||
+        match.email ||
+        `User #${id}`
+      );
+    }
+    return `User #${id}`;
+  };
+
+  const getWorkgroupLabel = (id, complianceItem) => {
+    if (!id) return "N/A";
+
+    if (complianceItem?.assignedWorkgroups?.length) {
+      const match = complianceItem.assignedWorkgroups.find(
+        (item) => Number(item.id) === Number(id),
+      );
+      if (match) {
+        return match.workgroupName || match.name || `Workgroup #${id}`;
+      }
+    }
+
+    if (complianceItem?.assignedWorkgroup?.id === Number(id)) {
+      return (
+        complianceItem.assignedWorkgroup.workgroupName || `Workgroup #${id}`
+      );
+    }
+
+    const match = workgroups.find((item) => Number(item.id) === Number(id));
+    if (match) {
+      return match.workgroupName || match.name || `Workgroup #${id}`;
+    }
+    return `Workgroup #${id}`;
+  };
+
+  const getDepartmentLabel = (id, complianceItem) => {
+    if (!id) return "N/A";
+
+    if (complianceItem?.assignedDepartments?.length) {
+      const match = complianceItem.assignedDepartments.find(
+        (item) => Number(item.id) === Number(id),
+      );
+      if (match) {
+        return match.departmentName || match.name || `Department #${id}`;
+      }
+    }
+
+    if (complianceItem?.assignedDepartment?.id === Number(id)) {
+      return (
+        complianceItem.assignedDepartment.departmentName || `Department #${id}`
+      );
+    }
+
+    const match = departments.find((item) => Number(item.id) === Number(id));
+    if (match) {
+      return match.departmentName || match.name || `Department #${id}`;
+    }
+    return `Department #${id}`;
+  };
+
+  const getUnitLabel = (id, complianceItem) => {
+    if (!id) return "N/A";
+
+    if (complianceItem?.assignedUnits?.length) {
+      const match = complianceItem.assignedUnits.find(
+        (item) => Number(item.id) === Number(id),
+      );
+      if (match) {
+        return match.UnitName || match.name || `Unit #${id}`;
+      }
+    }
+
+    if (complianceItem?.assignedUnit?.id === Number(id)) {
+      return complianceItem.assignedUnit.UnitName || `Unit #${id}`;
+    }
+
+    const match = units.find((item) => Number(item.id) === Number(id));
+    if (match) {
+      return match.UnitName || match.name || `Unit #${id}`;
+    }
+    return `Unit #${id}`;
+  };
+
+  const getAssignmentSummary = (item) => {
+    const parts = [];
+    if (
+      Array.isArray(item.assignedToUserIds) &&
+      item.assignedToUserIds.length
+    ) {
+      parts.push(
+        `Users: ${item.assignedToUserIds.map((id) => getUserLabel(id, item)).join(", ")}`,
+      );
+    } else if (item.assignedToUserId) {
+      parts.push(`User: ${getUserLabel(item.assignedToUserId, item)}`);
+    }
+    if (
+      Array.isArray(item.assignedToWorkgroupIds) &&
+      item.assignedToWorkgroupIds.length
+    ) {
+      parts.push(
+        `Workgroups: ${item.assignedToWorkgroupIds.map((id) => getWorkgroupLabel(id, item)).join(", ")}`,
+      );
+    } else if (item.assignedToWorkgroupId) {
+      parts.push(
+        `Workgroup: ${getWorkgroupLabel(item.assignedToWorkgroupId, item)}`,
+      );
+    }
+    if (
+      Array.isArray(item.assignedToDepartmentIds) &&
+      item.assignedToDepartmentIds.length
+    ) {
+      parts.push(
+        `Departments: ${item.assignedToDepartmentIds.map((id) => getDepartmentLabel(id, item)).join(", ")}`,
+      );
+    } else if (item.assignedToDepartmentId) {
+      parts.push(
+        `Department: ${getDepartmentLabel(item.assignedToDepartmentId, item)}`,
+      );
+    }
+    if (
+      Array.isArray(item.assignedToUnitsIds) &&
+      item.assignedToUnitsIds.length
+    ) {
+      parts.push(
+        `Units: ${item.assignedToUnitsIds.map((id) => getUnitLabel(id, item)).join(", ")}`,
+      );
+    } else if (item.assignedToUnitsId) {
+      parts.push(`Unit: ${getUnitLabel(item.assignedToUnitsId, item)}`);
+    }
+    return parts.length ? parts.join(" • ") : "Unassigned";
+  };
+
+  const getAssignedGroups = (item) => {
+    const groups = [];
+    const users = Array.isArray(item.assignedToUserIds)
+      ? item.assignedToUserIds
+      : item.assignedToUserId
+        ? [item.assignedToUserId]
+        : [];
+    if (users.length) {
+      groups.push({
+        title: "Users",
+        items: users.map((id) => getUserLabel(id, item)),
+      });
+    }
+
+    const workgroups = Array.isArray(item.assignedToWorkgroupIds)
+      ? item.assignedToWorkgroupIds
+      : item.assignedToWorkgroupId
+        ? [item.assignedToWorkgroupId]
+        : [];
+    if (workgroups.length) {
+      groups.push({
+        title: "Workgroups",
+        items: workgroups.map((id) => getWorkgroupLabel(id, item)),
+      });
+    }
+
+    const departments = Array.isArray(item.assignedToDepartmentIds)
+      ? item.assignedToDepartmentIds
+      : item.assignedToDepartmentId
+        ? [item.assignedToDepartmentId]
+        : [];
+    if (departments.length) {
+      groups.push({
+        title: "Departments",
+        items: departments.map((id) => getDepartmentLabel(id, item)),
+      });
+    }
+
+    const units = Array.isArray(item.assignedToUnitsIds)
+      ? item.assignedToUnitsIds
+      : item.assignedToUnitsId
+        ? [item.assignedToUnitsId]
+        : [];
+    if (units.length) {
+      groups.push({
+        title: "Units",
+        items: units.map((id) => getUnitLabel(id, item)),
+      });
+    }
+
+    return groups;
+  };
+
+  const getAssignedItems = (item) => {
+    return getAssignedGroups(item);
+  };
+
+  const getAssignmentPreview = (item) => {
+    const groups = getAssignedGroups(item);
+    if (!groups.length) return "Unassigned";
+
+    return groups
+      .map((group) => `${group.title}: ${group.items.length}`)
+      .join(" • ");
+  };
+
+  const findComplianceTitle = (item) => {
+    if (!item?.complianceTitleId) return null;
+    return Array.isArray(complianceFormTitles)
+      ? complianceFormTitles.find((title) => String(title.id) === String(item.complianceTitleId))
+      : null;
+  };
+
+  const findSubmissionForm = (item) => {
+    const title = findComplianceTitle(item);
+    if (!title || !Array.isArray(title.ComplianceForms)) return null;
+    return title.ComplianceForms.find((form) => String(form.id) === String(item.complianceFormId)) || null;
+  };
+
+  const getEventComplianceTypeLabel = (item) => {
+    const title = findComplianceTitle(item);
+    return title?.title || item?.complianceTitle || "Not set";
+  };
+
+  const getEventSubmissionForLabel = (item) => {
+    const form = findSubmissionForm(item);
+    return form?.formName || item?.complianceForm || "Not set";
+  };
+
+  const getEventSpecificSubmissionLabel = (item) => {
+    const raw = String(item?.complianceType || "").trim();
+    if (!raw) return "Not set";
+
+    const submissionFor = getEventSubmissionForLabel(item);
+    if (submissionFor !== "Not set") {
+      if (raw === submissionFor) return "Not set";
+      const prefix = `${submissionFor} / `;
+      if (raw.startsWith(prefix)) return raw.slice(prefix.length);
+    }
+
+    return raw;
+  };
+
+  const getSelectedComplianceContext = () => {
+    const selectedTitle = Array.isArray(complianceFormTitles)
+      ? complianceFormTitles.find(
+          (title) => String(title.id) === String(formData.complianceTitleId),
+        )
+      : null;
+    const selectedForm = Array.isArray(selectedTitle?.ComplianceForms)
+      ? selectedTitle.ComplianceForms.find(
+          (form) => String(form.id) === String(formData.complianceFormId),
+        )
+      : null;
+
+    return { selectedTitle, selectedForm };
+  };
+
+  const resolveComplianceTypeLabel = () => {
+    const trimmed = String(formData.complianceType || "").trim();
+    if (trimmed) {
+      return trimmed;
+    }
+
+    return "";
+  };
+
+  const resolveDeadlineTitle = () => {
+    const { selectedTitle, selectedForm } = getSelectedComplianceContext();
+    const specificSubmission = String(formData.complianceType || "").trim();
+
+    if (specificSubmission) {
+      const pathParts = specificSubmission
+        .split(" / ")
+        .map((part) => part.trim())
+        .filter(Boolean);
+      return pathParts[pathParts.length - 1] || specificSubmission;
+    }
+
+    if (selectedForm?.formName) {
+      return selectedForm.formName;
+    }
+
+    if (selectedTitle?.title) {
+      return selectedTitle.title;
+    }
+
+    return String(formData.title || selectedEvent?.title || "").trim();
+  };
+
+  const getCreatorLabel = (item) => {
+    if (!item?.createdBy) return "Unknown creator";
+    // Use embedded creator data if available
+    if (item.creator) {
+      return (
+        [item.creator.firstName, item.creator.middleName, item.creator.lastName]
+          .filter(Boolean)
+          .join(" ") ||
+        item.creator.username ||
+        item.creator.email ||
+        getUserLabel(item.createdBy, item)
+      );
+    }
+    return getUserLabel(item.createdBy, item);
   };
 
   const openComplianceModal = (date) => {
@@ -338,10 +813,14 @@ const getWeekEventSegments = (weekCells) => {
     setFormData((prev) => ({
       ...prev,
       title: "",
-      description: "",
-      complianceType: "Audit",
-      assigned: "",
-      status: "Pending",
+      complianceType: "",
+      complianceTitleId: "",
+      complianceFormId: "",
+      assignedToUserIds: [],
+      assignedToWorkgroupIds: [],
+      assignedToDepartmentIds: [],
+      assignedToUnitsIds: [],
+      status: "No Submission",
       colorIndex: 0,
       startDate: formatDateTimeValue(pickedDate),
       endDate: formatDateTimeValue(pickedDate),
@@ -355,8 +834,47 @@ const getWeekEventSegments = (weekCells) => {
     setIsModalOpen(false);
   };
 
+  useEffect(() => {
+    const selectedId = location?.state?.openDetailsForComplianceId;
+    if (!selectedId) return;
+    setPendingOpenComplianceId(selectedId);
+  }, [location?.state]);
+
+  useEffect(() => {
+    if (!pendingOpenComplianceId) return;
+
+    const openPendingItem = async () => {
+      const event = complianceItems.find(
+        (item) => String(item.id) === String(pendingOpenComplianceId),
+      );
+
+      if (event) {
+        openEventDetails(event);
+        setPendingOpenComplianceId(null);
+        return;
+      }
+
+      const deletedEvent = await fetchComplianceItemById(pendingOpenComplianceId);
+      if (deletedEvent) {
+        setComplianceItems((prev) => [...prev, deletedEvent]);
+        openEventDetails(deletedEvent);
+      }
+      setPendingOpenComplianceId(null);
+    };
+
+    openPendingItem();
+  }, [pendingOpenComplianceId, complianceItems]);
+
   const openEditComplianceModal = (event) => {
     if (!event) return;
+
+    if (!canModify(event)) {
+      SweetAlert.error(
+        "Permission denied",
+        "You can only edit items you created or if you have the calendar override permission.",
+      );
+      return;
+    }
 
     const start = event.startDate ? new Date(event.startDate) : new Date();
     const end = event.endDate ? new Date(event.endDate) : new Date();
@@ -369,10 +887,37 @@ const getWeekEventSegments = (weekCells) => {
       title: event.title || "",
       startDate: formatDateTimeValue(start),
       endDate: formatDateTimeValue(end),
-      description: event.description || "",
-      complianceType: event.complianceType || "Audit",
-      assigned: event.assigned || "",
-      status: event.status || "Pending",
+      complianceType: event.complianceType || "",
+      complianceTitleId: event.complianceTitleId || "",
+      complianceFormId: event.complianceFormId || "",
+      assignedToUserIds:
+        Array.isArray(event.assignedToUserIds) && event.assignedToUserIds.length
+          ? event.assignedToUserIds
+          : event.assignedToUserId
+            ? [event.assignedToUserId]
+            : [],
+      assignedToWorkgroupIds:
+        Array.isArray(event.assignedToWorkgroupIds) &&
+        event.assignedToWorkgroupIds.length
+          ? event.assignedToWorkgroupIds
+          : event.assignedToWorkgroupId
+            ? [event.assignedToWorkgroupId]
+            : [],
+      assignedToDepartmentIds:
+        Array.isArray(event.assignedToDepartmentIds) &&
+        event.assignedToDepartmentIds.length
+          ? event.assignedToDepartmentIds
+          : event.assignedToDepartmentId
+            ? [event.assignedToDepartmentId]
+            : [],
+      assignedToUnitsIds:
+        Array.isArray(event.assignedToUnitsIds) &&
+        event.assignedToUnitsIds.length
+          ? event.assignedToUnitsIds
+          : event.assignedToUnitsId
+            ? [event.assignedToUnitsId]
+            : [],
+      status: normalizeComplianceStatusValue(event.status || "No Submission"),
       colorIndex: event.colorIndex ?? 0,
     });
     setIsModalOpen(true);
@@ -387,11 +932,17 @@ const getWeekEventSegments = (weekCells) => {
   const closeEventDetails = () => {
     setIsDetailsOpen(false);
     setSelectedEvent(null);
+    setAssignedDropdownOpen(false);
   };
 
   const handleFormChange = (event) => {
-    const { name, value } = event.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    const { name, value, options, multiple } = event.target;
+    const fieldValue = multiple
+      ? Array.from(options)
+          .filter((option) => option.selected)
+          .map((option) => option.value)
+      : value;
+    setFormData((prev) => ({ ...prev, [name]: fieldValue }));
   };
 
   // Get week number
@@ -437,17 +988,29 @@ const getWeekEventSegments = (weekCells) => {
     );
   };
 
- const getEventsForDate = (date) => {
-  if (!date) return [];
-  const normalizedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  return complianceItems.filter((item) => {
-    const rawStart = new Date(item.startDate);
-    const rawEnd = new Date(item.endDate);
-    const itemStart = new Date(rawStart.getFullYear(), rawStart.getMonth(), rawStart.getDate());
-    const itemEnd = new Date(rawEnd.getFullYear(), rawEnd.getMonth(), rawEnd.getDate());
-    return itemStart <= normalizedDate && itemEnd >= normalizedDate;
-  });
-};
+  const getEventsForDate = (date) => {
+    if (!date) return [];
+    const normalizedDate = new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate(),
+    );
+    return visibleComplianceItems.filter((item) => {
+      const rawStart = new Date(item.startDate);
+      const rawEnd = new Date(item.endDate);
+      const itemStart = new Date(
+        rawStart.getFullYear(),
+        rawStart.getMonth(),
+        rawStart.getDate(),
+      );
+      const itemEnd = new Date(
+        rawEnd.getFullYear(),
+        rawEnd.getMonth(),
+        rawEnd.getDate(),
+      );
+      return itemStart <= normalizedDate && itemEnd >= normalizedDate;
+    });
+  };
 
   const isComplianceDay = (date) => {
     return getEventsForDate(date).length > 0;
@@ -468,7 +1031,7 @@ const getWeekEventSegments = (weekCells) => {
     }
   };
 
-  // Ten distinct color classes for deadlines/events
+  // Twenty distinct color classes for deadlines/events
   const DEADLINE_COLOR_CLASSES = [
     "bg-emerald-600 text-white border-emerald-600 hover:bg-emerald-700",
     "bg-blue-500 text-white border-blue-500 hover:bg-blue-600",
@@ -480,6 +1043,16 @@ const getWeekEventSegments = (weekCells) => {
     "bg-sky-500 text-white border-sky-500 hover:bg-sky-600",
     "bg-violet-500 text-white border-violet-500 hover:bg-violet-600",
     "bg-cyan-500 text-white border-cyan-500 hover:bg-cyan-600",
+    "bg-fuchsia-500 text-white border-fuchsia-500 hover:bg-fuchsia-600",
+    "bg-amber-500 text-white border-amber-500 hover:bg-amber-600",
+    "bg-teal-500 text-white border-teal-500 hover:bg-teal-600",
+    "bg-orange-500 text-white border-orange-500 hover:bg-orange-600",
+    "bg-emerald-400 text-white border-emerald-400 hover:bg-emerald-500",
+    "bg-indigo-400 text-white border-indigo-400 hover:bg-indigo-500",
+    "bg-rose-400 text-white border-rose-400 hover:bg-rose-500",
+    "bg-lime-400 text-white border-lime-400 hover:bg-lime-500",
+    "bg-sky-400 text-white border-sky-400 hover:bg-sky-500",
+    "bg-violet-400 text-white border-violet-400 hover:bg-violet-500",
   ];
 
   const getColorClassForItem = (item) => {
@@ -513,7 +1086,7 @@ const getWeekEventSegments = (weekCells) => {
     const maxVisible = 2;
     return (
       <div className="mt-2 flex w-full flex-col gap-1 text-left items-stretch">
-          {events.slice(0, maxVisible).map((item) => {
+        {events.slice(0, maxVisible).map((item) => {
           const itemDate = new Date(item.startDate);
           const itemEndDate = new Date(item.endDate);
           const colorClasses = getColorClassForItem(item);
@@ -609,23 +1182,128 @@ const getWeekEventSegments = (weekCells) => {
       }
     } catch (error) {
       console.error("Failed to load compliance items:", error);
-      SweetAlert.error("Unable to load compliance items", "Please try again shortly.");
+      SweetAlert.error(
+        "Unable to load compliance items",
+        "Please try again shortly.",
+      );
     } finally {
       setIsLoading(false);
     }
   };
 
+  const fetchComplianceItemById = async (id) => {
+    try {
+      const { data } = await api.get(endpoints.compliance.getById(id), {
+        params: { includeDeleted: true },
+      });
+      if (!data?.error) return null;
+      return data.item || null;
+    } catch (error) {
+      console.error("Failed to fetch compliance item by id:", error);
+      return null;
+    }
+  };
+
   useEffect(() => {
-    const start = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-    const end = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59);
+    const start = new Date(
+      currentDate.getFullYear(),
+      currentDate.getMonth(),
+      1,
+    );
+    const end = new Date(
+      currentDate.getFullYear(),
+      currentDate.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+    );
     fetchComplianceItems(start, end);
   }, [currentDate]);
+
+  useEffect(() => {
+    const loadReferenceData = async () => {
+      try {
+        const [
+          usersResult,
+          workgroupsResult,
+          unitsResult,
+          departmentsResult,
+          complianceTitlesResult,
+        ] = await Promise.allSettled([
+          api.get(endpoints.users.getAll),
+          api.get(endpoints.workgroups.getAll),
+          api.get(endpoints.units.getAll),
+          api.get(endpoints.departments.getAll),
+          api.get(endpoints.complianceForms.titles.getAll),
+        ]);
+
+        setUsers(
+          usersResult.status === "fulfilled"
+            ? usersResult.value?.data?.users || []
+            : [],
+        );
+        setWorkgroups(
+          workgroupsResult.status === "fulfilled"
+            ? workgroupsResult.value?.data?.workgroups || []
+            : [],
+        );
+        setDepartments(
+          departmentsResult.status === "fulfilled"
+            ? departmentsResult.value?.data?.departments || []
+            : [],
+        );
+        setUnits(
+          unitsResult.status === "fulfilled"
+            ? unitsResult.value?.data?.units || []
+            : [],
+        );
+        setComplianceFormTitles(
+          complianceTitlesResult.status === "fulfilled"
+            ? complianceTitlesResult.value?.data?.data || []
+            : [],
+        );
+      } catch (error) {
+        console.error("Failed to load assignment reference data:", error);
+      }
+    };
+
+    loadReferenceData();
+  }, []);
+
+  useEffect(() => {
+    if (!assignedDropdownOpen) return undefined;
+    const handleOutsideClick = (event) => {
+      const isOverlayClick = event.target?.closest?.('[data-assigned-overlay="true"]');
+      if (isOverlayClick) return;
+
+      if (
+        assignedDetailsRef.current &&
+        !assignedDetailsRef.current.contains(event.target)
+      ) {
+        setAssignedDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [assignedDropdownOpen]);
 
   // Listen for refresh event from Header
   useEffect(() => {
     const handleRefresh = () => {
-      const start = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-      const end = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59);
+      const start = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth(),
+        1,
+      );
+      const end = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth() + 1,
+        0,
+        23,
+        59,
+        59,
+      );
       fetchComplianceItems(start, end);
     };
 
@@ -633,62 +1311,191 @@ const getWeekEventSegments = (weekCells) => {
     return () => window.removeEventListener("app:refresh", handleRefresh);
   }, [currentDate]);
 
+  const handleDownloadFile = (
+    complianceItemId,
+    originalFilename,
+    index = 0,
+  ) => {
+    if (!complianceItemId) return;
+
+    const downloadUrl = `${api.defaults.baseURL}${endpoints.compliance.download(complianceItemId)}?index=${index}`;
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+    link.download = originalFilename || "file";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const isPdfFile = (fileName) => {
+    if (!fileName) return false;
+    return fileName.toLowerCase().endsWith(".pdf");
+  };
+
+  const getFileIcon = () => {
+    return (
+      <File className="w-5 h-5 text-slate-500 dark:text-slate-400 shrink-0" />
+    );
+  };
+
+  const handleViewPdf = (fileUrl) => {
+    if (!fileUrl) return;
+    window.open(fileUrl, "_blank");
+  };
+
+  const openDeleteConfirmModal = () => {
+    if (!selectedEvent?.id) return;
+    if (!canModify(selectedEvent)) {
+      SweetAlert.error(
+        "Permission denied",
+        "You can only delete items you created or if you have the calendar override permission.",
+      );
+      return;
+    }
+
+    setDeleteConfirmation("");
+    setDeleteModalOpen(true);
+  };
+
+  const closeDeleteConfirmModal = () => {
+    setDeleteModalOpen(false);
+    setDeleteConfirmation("");
+  };
+
   const handleDeleteCompliance = async () => {
     if (!selectedEvent?.id) return;
+    if (!canModify(selectedEvent)) {
+      SweetAlert.error(
+        "Permission denied",
+        "You can only delete items you created or if you have the calendar override permission.",
+      );
+      return;
+    }
 
-    const result = await SweetAlert.confirmDelete(selectedEvent.title || "this compliance item");
-    if (!result.isConfirmed) return;
+    if (deleteConfirmation.trim().toLowerCase() !== "delete") {
+      return;
+    }
 
     try {
-      const { data } = await api.delete(endpoints.compliance.delete(selectedEvent.id));
+      const { data } = await api.delete(
+        endpoints.compliance.delete(selectedEvent.id),
+      );
       if (data?.error) {
-        SweetAlert.error("Unable to delete compliance item", data.message || "Please try again.");
+        SweetAlert.error(
+          "Unable to delete compliance item",
+          data.message || "Please try again.",
+        );
+        closeDeleteConfirmModal();
         return;
       }
 
-      SweetAlert.success("Compliance item deleted", "The calendar event was removed successfully.");
+      SweetAlert.success(
+        "Deadline moved to records",
+        "The deadline was removed from the calendar and can be restored from deleted records.",
+      );
+      closeDeleteConfirmModal();
       closeEventDetails();
-      const start = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-      const end = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59);
+      const start = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth(),
+        1,
+      );
+      const end = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth() + 1,
+        0,
+        23,
+        59,
+        59,
+      );
       fetchComplianceItems(start, end);
     } catch (error) {
       console.error("Failed to delete compliance item:", error);
-      SweetAlert.error("Unable to delete compliance item", "Please try again shortly.");
+      SweetAlert.error(
+        "Unable to delete compliance item",
+        "Please try again shortly.",
+      );
+      closeDeleteConfirmModal();
     }
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
 
+    // Prevent saving updates when user cannot modify this item
+    if (editingItemId && !canModify(selectedEvent)) {
+      SweetAlert.error("Permission denied", "You cannot update this item.");
+      return;
+    }
+
     try {
       if (!formData.startDate || !formData.endDate) {
-        SweetAlert.warning("Missing dates", "Start date and end date are required.");
+        SweetAlert.warning(
+          "Missing dates",
+          "Start date and end date are required.",
+        );
         return;
       }
 
       if (new Date(formData.startDate) > new Date(formData.endDate)) {
-        SweetAlert.warning("Invalid date range", "End date must be the same as or after start date.");
+        SweetAlert.warning(
+          "Invalid date range",
+          "End date must be the same as or after start date.",
+        );
         return;
       }
 
-      const payload = {
-        title: formData.title,
-        description: formData.description,
-        complianceType: formData.complianceType,
-        assigned: formData.assigned,
-        status: formData.status,
-        startDate: formData.startDate,
-        endDate: formData.endDate,
-        colorIndex: formData.colorIndex,
-      };
+      const resolvedComplianceType = resolveComplianceTypeLabel();
+      const resolvedDeadlineTitle = resolveDeadlineTitle();
+      if (!resolvedDeadlineTitle) {
+        SweetAlert.warning(
+          "Missing compliance selection",
+          "Select a compliance type before saving.",
+        );
+        return;
+      }
+
+      const payload = new FormData();
+      payload.append("title", resolvedDeadlineTitle);
+      payload.append("complianceType", resolvedComplianceType);
+      payload.append("complianceTitleId", formData.complianceTitleId || "");
+      payload.append("complianceFormId", formData.complianceFormId || "");
+      payload.append(
+        "assignedToUserIds",
+        JSON.stringify(formData.assignedToUserIds || []),
+      );
+      payload.append(
+        "assignedToWorkgroupIds",
+        JSON.stringify(formData.assignedToWorkgroupIds || []),
+      );
+      payload.append(
+        "assignedToDepartmentIds",
+        JSON.stringify(formData.assignedToDepartmentIds || []),
+      );
+      payload.append(
+        "assignedToUnitsIds",
+        JSON.stringify(formData.assignedToUnitsIds || []),
+      );
+      const resolvedStatus = formData.status?.trim() ? formData.status : "No Submission";
+      payload.append("status", resolvedStatus);
+      payload.append("startDate", formData.startDate);
+      payload.append("endDate", formData.endDate);
+      payload.append("colorIndex", formData.colorIndex);
 
       const request = editingItemId
-        ? api.put(endpoints.compliance.update(editingItemId), payload)
-        : api.post(endpoints.compliance.create, payload);
+        ? api.put(endpoints.compliance.update(editingItemId), payload, {
+            headers: { "Content-Type": "multipart/form-data" },
+          })
+        : api.post(endpoints.compliance.create, payload, {
+            headers: { "Content-Type": "multipart/form-data" },
+          });
 
       const { data } = await request;
       if (data?.error) {
-        SweetAlert.error("Unable to save compliance item", data.message || "Please try again.");
+        SweetAlert.error(
+          "Unable to save compliance item",
+          data.message || "Please try again.",
+        );
         return;
       }
 
@@ -696,7 +1503,7 @@ const getWeekEventSegments = (weekCells) => {
         editingItemId ? "Compliance item updated" : "Compliance item saved",
         editingItemId
           ? "The calendar event was updated successfully."
-          : "The calendar event was created successfully."
+          : "The calendar event was created successfully.",
       );
       setIsModalOpen(false);
       setSelectedDate(null);
@@ -705,19 +1512,37 @@ const getWeekEventSegments = (weekCells) => {
         title: "",
         startDate: "",
         endDate: "",
-        description: "",
-        complianceType: "Audit",
-        assigned: "",
-        status: "Pending",
+        complianceType: "",
+        complianceTitleId: "",
+        complianceFormId: "",
+        assignedToUserIds: [],
+        assignedToWorkgroupIds: [],
+        assignedToDepartmentIds: [],
+        assignedToUnitsIds: [],
+        status: "No Submission",
         colorIndex: 0,
       });
 
-      const start = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-      const end = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59);
+      const start = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth(),
+        1,
+      );
+      const end = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth() + 1,
+        0,
+        23,
+        59,
+        59,
+      );
       fetchComplianceItems(start, end);
     } catch (error) {
       console.error("Failed to save compliance item:", error);
-      SweetAlert.error("Unable to save compliance item", "Please try again shortly.");
+      SweetAlert.error(
+        "Unable to save compliance item",
+        "Please try again shortly.",
+      );
     }
   };
 
@@ -737,244 +1562,180 @@ const getWeekEventSegments = (weekCells) => {
       <hr className="border-gray-200 dark:border-slate-600 mb-4 sm:mb-6 md:mb-8" />
       <div className="max-w-4xl sm:max-w-5xl md:max-w-6xl lg:max-w-7xl xl:max-w-8xl 2xl:max-w-full mx-auto">
         {/* Header */}
-        {/* Top Row */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-6 md:gap-8 mb-4 sm:mb-6 md:mb-8">
-          {/* Left: Date Display */}
-          <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
-            <div className="flex flex-col items-center rounded-lg overflow-hidden shadow-md min-w-[70px] sm:min-w-[70px]">
-              {/* Month band */}
-              <div className="w-full bg-red-600 dark:bg-slate-500 flex items-center justify-center py-1">
-                <span className="text-xs sm:text-sm font-bold text-white uppercase tracking-wide">
-                  {currentDate.toLocaleString("en-US", { month: "short" })}
-                </span>
-              </div>
-
-              {/* Date body */}
-              <div className="w-full bg-white dark:bg-slate-800 flex items-center justify-center py-2">
-                <span className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-600 dark:text-white">
-                  {currentDate.getDate()}
-                </span>
-              </div>
-            </div>
-            <div>
-              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-600 dark:text-white">
-                {viewTitle}
-                <span className="ml-1 sm:ml-2 inline-block bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-gray-300 text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md font-medium">
-                  {viewMode} view
-                </span>
-              </h1>
-              <p className="text-xs sm:text-sm md:text-base text-gray-500 dark:text-gray-400 mt-1">
-                {viewMode === "Day"
-                  ? viewDateRange.start
-                  : `${viewDateRange.start} – ${viewDateRange.end}`}
-              </p>
-            </div>
-          </div>
-
-          {/* Right: Actions */}
-          <div className="w-full sm:w-auto flex flex-wrap items-center gap-2 sm:gap-3 md:gap-4">
-            {/* Search */}
-            <div className="relative flex-1 sm:flex-none md:flex-1 lg:flex-none">
-              <Search className="absolute left-2 sm:left-3 top-2 sm:top-2.5 w-3 sm:w-4 h-3 sm:h-4 text-gray-400 dark:text-gray-500" />
-              <input
-                type="text"
-                placeholder="Search"
-                className="w-full pl-7 sm:pl-9 pr-2 sm:pr-3 py-1 sm:py-2 text-xs sm:text-sm bg-gray-100 dark:bg-slate-700 border border-gray-200 dark:border-slate-600 rounded-lg focus:outline-none focus:border-gray-400 dark:focus:border-slate-500 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500"
-              />
-            </div>
-
-            {/* Navigation */}
-            <button
-              onClick={handlePrev}
-              className="p-1 sm:p-2 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-lg transition"
-            >
-              <ChevronLeft className="w-4 sm:w-5 h-4 sm:h-5" />
-            </button>
-            <button
-              onClick={handleNext}
-              className="p-1 sm:p-2 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-lg transition"
-            >
-              <ChevronRight className="w-4 sm:w-5 h-4 sm:h-5" />
-            </button>
-
-            {/* Today Button */}
-            <button
-              onClick={handleToday}
-              className="px-2 sm:px-3 md:px-4 py-1 sm:py-2 bg-gray-100 dark:bg-slate-700 hover:bg-gray-200 dark:hover:bg-slate-600 rounded-lg transition text-xs sm:text-sm font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap"
-            >
-              Today
-            </button>
-
-            {/* View Mode Selector */}
-            <div className="relative inline-flex">
-              <select
-                value={viewMode}
-                onChange={(event) => setViewMode(event.target.value)}
-                className="appearance-none rounded-lg border border-gray-200 bg-gray-100 px-3 py-2 pr-8 text-xs sm:text-sm font-medium text-gray-900 shadow-sm outline-none transition focus:border-emerald-500 dark:border-slate-600 dark:bg-slate-700 dark:text-gray-100 dark:focus:border-slate-500"
-              >
-                <option value="Month">Month view</option>
-                <option value="Week">Week view</option>
-                <option value="Day">Day view</option>
-              </select>
-              <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-500 dark:text-gray-300">
-                <Calendar className="w-3 h-3" />
-              </span>
-            </div>
-
-          </div>
-        </div>
+        <CalendarHeader
+          currentDate={currentDate}
+          viewMode={viewMode}
+          viewTitle={viewTitle}
+          viewDateRange={viewDateRange}
+          onPrev={handlePrev}
+          onNext={handleNext}
+          onToday={handleToday}
+          onViewModeChange={setViewMode}
+        />
 
         {/* Calendar Grid */}
         <div className="bg-white dark:bg-slate-800 rounded-lg sm:rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden shadow-sm">
           {viewMode === "Month" ? (
-            <>
-              {/* Day Headers - use flex row to ensure horizontal layout */}
-              <div className="w-full border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-950">
-                <div className="flex w-full">
-                  {dayNames.map((dayName, idx) => (
-                    <div
-                      key={dayName}
-                      className={`flex-1 p-1 sm:p-2 md:p-3 lg:p-4 text-center border-r border-gray-200 dark:border-slate-700 ${idx === dayNames.length - 1 ? 'last:border-r-0' : ''}`}
-                    >
-                      <div className="text-xs sm:text-sm md:text-base font-semibold text-gray-700 dark:text-gray-300">
-                        {dayName}
+            <div className="overflow-x-auto">
+              <div className="min-w-[700px]">
+                {/* Day Headers - use flex row to ensure horizontal layout */}
+                <div className="w-full border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-950">
+                  <div className="flex w-full">
+                    {dayNames.map((dayName, idx) => (
+                      <div
+                        key={dayName}
+                        className={`flex-1 p-1 sm:p-2 md:p-3 lg:p-4 text-center border-r border-gray-200 dark:border-slate-700 ${idx === dayNames.length - 1 ? "last:border-r-0" : ""}`}
+                      >
+                        <div className="text-xs sm:text-sm md:text-base font-semibold text-gray-700 dark:text-gray-300">
+                          {dayName}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              {/* Week Rows */}
-              {monthWeeks.map((weekCells, weekIdx) => {
-                const { visibleSegments, hiddenPerDay } = getWeekEventSegments(weekCells);
-                return (
-                  <div key={`week-${weekIdx}`} className="relative">
-                    {/* Day cells */}
-                    <div className="grid grid-cols-7">
-                      {weekCells.map((cell, dayIdx) => (
-                        <button
-                          type="button"
-                          key={`cell-${weekIdx}-${dayIdx}`}
-                          onClick={() =>
-                            openComplianceModal(
-                              new Date(cell.date.getFullYear(), cell.date.getMonth(), cell.date.getDate(), 9, 0)
-                            )
-                          }
-                          className={`min-h-28 sm:min-h-32 md:min-h-36 lg:min-h-40 xl:min-h-44 p-1 sm:p-2 md:p-3 lg:p-4 border-r border-b border-gray-200 dark:border-slate-700 last:border-r-0 flex flex-col items-center text-left transition ${
-                            !cell.isCurrentMonth
-                              ? "bg-gray-50 dark:bg-slate-950/70 text-gray-400 dark:text-slate-600 hover:bg-gray-100 dark:hover:bg-slate-800/80"
-                              : isToday(cell.day, true)
-                              ? "bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700/50"
-                              : "bg-white dark:bg-slate-900 hover:bg-gray-50 dark:hover:bg-slate-700/50"
-                          }`}
-                        >
-                          <span
-                            className={`text-xs sm:text-sm md:text-base font-semibold ${
-                              cell.isCurrentMonth && isToday(cell.day, true)
-                                ? "w-5 sm:w-6 md:w-7 h-5 sm:h-6 md:h-7 flex items-center justify-center rounded-full bg-green-400 text-gray-900 font-bold"
-                                : cell.isCurrentMonth
-                                ? "text-gray-900 dark:text-gray-200"
-                                : ""
+                {/* Week Rows */}
+                {monthWeeks.map((weekCells, weekIdx) => {
+                  const { visibleSegments, hiddenPerDay } =
+                    getWeekEventSegments(weekCells);
+                  return (
+                    <div key={`week-${weekIdx}`} className="relative">
+                      {/* Day cells */}
+                      <div className="grid grid-cols-7">
+                        {weekCells.map((cell, dayIdx) => (
+                          <button
+                            type="button"
+                            key={`cell-${weekIdx}-${dayIdx}`}
+                            onClick={() =>
+                              openComplianceModal(
+                                new Date(
+                                  cell.date.getFullYear(),
+                                  cell.date.getMonth(),
+                                  cell.date.getDate(),
+                                  9,
+                                  0,
+                                ),
+                              )
+                            }
+                            className={`aspect-square p-1 sm:p-2 md:p-3 lg:p-4 border-r border-b border-gray-200 dark:border-slate-700 last:border-r-0 flex flex-col items-center text-left transition ${
+                              !cell.isCurrentMonth
+                                ? "bg-gray-50 dark:bg-slate-950/70 text-gray-400 dark:text-slate-600 hover:bg-gray-100 dark:hover:bg-slate-800/80"
+                                : isToday(cell.day, true)
+                                  ? "bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700/50"
+                                  : "bg-white dark:bg-slate-900 hover:bg-gray-50 dark:hover:bg-slate-700/50"
                             }`}
                           >
-                            {cell.day}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
+                            <span
+                              className={`text-xs sm:text-sm md:text-base font-semibold ${
+                                cell.isCurrentMonth && isToday(cell.day, true)
+                                  ? "w-5 sm:w-6 md:w-7 h-5 sm:h-6 md:h-7 flex items-center justify-center rounded-full bg-green-400 text-gray-900 font-bold"
+                                  : cell.isCurrentMonth
+                                    ? "text-gray-900 dark:text-gray-200"
+                                    : ""
+                              }`}
+                            >
+                              {cell.day}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
 
-                    {/* Merged event bars overlay */}
-                    <div
-                      className="pointer-events-none absolute inset-x-0 grid grid-cols-7"
-                      style={{
+                      {/* Merged event bars overlay */}
+                      <div
+                        className="pointer-events-none absolute inset-x-0 grid grid-cols-7"
+                        style={{
                           top: "3rem",
                           gridAutoRows: `${LANE_HEIGHT_PX}px`,
                           rowGap: `${LANE_GAP_PX}px`,
                         }}
-                    >
-                      {visibleSegments.map((seg, segIdx) => (
-                        <div
-                          key={`${seg.item.id}-${weekIdx}-${segIdx}`}
-                          role="button"
-                          tabIndex={0}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openEventDetails(seg.item);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
+                      >
+                        {visibleSegments.map((seg, segIdx) => (
+                          <div
+                            key={`${seg.item.id}-${weekIdx}-${segIdx}`}
+                            role="button"
+                            tabIndex={0}
+                            onClick={(e) => {
                               e.stopPropagation();
                               openEventDetails(seg.item);
-                            }
-                          }}
-                          style={{
-                            gridColumn: `${seg.startCol + 1} / ${seg.endCol + 2}`,
-                            gridRow: seg.lane + 1,
-                          }}
-                          className={`pointer-events-auto mx-0.5 flex items-center overflow-hidden truncate px-2 py-1 text-[10px] font-semibold leading-tight cursor-pointer transition ${getColorClassForItem(
-                            seg.item
-                          )} ${seg.continuesBefore ? "rounded-l-none" : "rounded-l-md"} ${
-                            seg.continuesAfter ? "rounded-r-none" : "rounded-r-md"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 w-full">
-                            <span className="text-[10px] font-semibold flex-shrink-0">
-                              {formatEventTime(seg.item.startDate)}
-                            </span>
-                            <span className="truncate">{seg.item.title}</span>
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                openEventDetails(seg.item);
+                              }
+                            }}
+                            style={{
+                              gridColumn: `${seg.startCol + 1} / ${seg.endCol + 2}`,
+                              gridRow: seg.lane + 1,
+                            }}
+                            className={`pointer-events-auto mx-0.5 flex items-center overflow-hidden truncate px-2 py-1 text-[10px] font-semibold leading-tight cursor-pointer transition ${getColorClassForItem(
+                              seg.item,
+                            )} ${seg.continuesBefore ? "rounded-l-none" : "rounded-l-md"} ${
+                              seg.continuesAfter
+                                ? "rounded-r-none"
+                                : "rounded-r-md"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 w-full">
+                              <span className="text-[10px] font-semibold flex-shrink-0">
+                                {formatEventTime(seg.item.startDate)}
+                              </span>
+                              <span className="truncate">{seg.item.title}</span>
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
 
-                    {/* "+N more" per day when a day has more items than visible lanes */}
-                    <div
-                      className="pointer-events-none absolute inset-x-0 grid grid-cols-7"
-                      style={{
+                      {/* "+N more" per day when a day has more items than visible lanes */}
+                      <div
+                        className="pointer-events-none absolute inset-x-0 grid grid-cols-7"
+                        style={{
                           top: `calc(3rem + ${MAX_VISIBLE_LANES * (LANE_HEIGHT_PX + LANE_GAP_PX)}px)`,
                         }}
-                    >
-                      {hiddenPerDay.map((count, dayIdx) => (
-                        <div key={`more-${weekIdx}-${dayIdx}`} className="px-2">
-                          {count > 0 ? (
-                            <button
-                              type="button"
-                              role="button"
-                              tabIndex={0}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const cellDate = weekCells[dayIdx].date;
-                                const events = getEventsForDate(cellDate);
-                                setDayListDate(cellDate);
-                                setDayListEvents(events);
-                                setDayListOpen(true);
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                  e.preventDefault();
+                      >
+                        {hiddenPerDay.map((count, dayIdx) => (
+                          <div key={`more-${weekIdx}-${dayIdx}`} className="px-2">
+                            {count > 0 ? (
+                              <button
+                                type="button"
+                                role="button"
+                                tabIndex={0}
+                                onClick={(e) => {
                                   e.stopPropagation();
                                   const cellDate = weekCells[dayIdx].date;
                                   const events = getEventsForDate(cellDate);
                                   setDayListDate(cellDate);
                                   setDayListEvents(events);
                                   setDayListOpen(true);
-                                }
-                              }}
-                              className="pointer-events-auto w-full flex items-start justify-start h-5 rounded-md bg-slate-100 dark:bg-slate-700 text-[10px] font-semibold text-slate-700 dark:text-slate-200 cursor-pointer hover:brightness-95 dark:hover:bg-slate-500 transition px-2 py-1"
-                            >
-                              +{count} more
-                            </button>
-                          ) : null}
-                        </div>
-                      ))}
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    const cellDate = weekCells[dayIdx].date;
+                                    const events = getEventsForDate(cellDate);
+                                    setDayListDate(cellDate);
+                                    setDayListEvents(events);
+                                    setDayListOpen(true);
+                                  }
+                                }}
+                                className="pointer-events-auto w-full flex items-start justify-start h-5 rounded-md bg-slate-100 dark:bg-slate-700 text-[10px] font-semibold text-slate-700 dark:text-slate-200 cursor-pointer hover:brightness-95 dark:hover:bg-slate-500 transition px-2 py-1"
+                              >
+                                +{count} more
+                              </button>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </>
+                  );
+                })}
+              </div>
+            </div>
           ) : viewMode === "Week" ? (
-            <>
+            <div className="overflow-x-auto">
+              <div className="min-w-[700px]">
               <div className="grid grid-cols-7 gap-0 border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-950">
                 {dayNames.map((dayName) => (
                   <div
@@ -1009,7 +1770,9 @@ const getWeekEventSegments = (weekCells) => {
                             {date.getDate()}
                           </span>
                           <span className="text-[10px] uppercase tracking-[0.25em] text-slate-500 dark:text-slate-400">
-                            {date.toLocaleDateString("en-US", { month: "short" })}
+                            {date.toLocaleDateString("en-US", {
+                              month: "short",
+                            })}
                           </span>
                         </div>
                       </div>
@@ -1027,7 +1790,8 @@ const getWeekEventSegments = (weekCells) => {
                 >
                   {(() => {
                     const weekCells = weekDays.map((date) => ({ date }));
-                    const { visibleSegments, hiddenPerDay } = getWeekEventSegments(weekCells);
+                    const { visibleSegments, hiddenPerDay } =
+                      getWeekEventSegments(weekCells);
                     return (
                       <>
                         {visibleSegments.map((seg, segIdx) => (
@@ -1060,7 +1824,7 @@ const getWeekEventSegments = (weekCells) => {
                             </div>
                           </div>
                         ))}
-                        {hiddenPerDay.map((count, dayIdx) => (
+                        {hiddenPerDay.map((count, dayIdx) =>
                           count > 0 ? (
                             <button
                               key={`more-week-${dayIdx}`}
@@ -1081,26 +1845,32 @@ const getWeekEventSegments = (weekCells) => {
                             >
                               +{count} more
                             </button>
-                          ) : null
-                        ))}
+                          ) : null,
+                        )}
                       </>
                     );
                   })()}
                 </div>
               </div>
-            </>
+              </div>
+            </div>
           ) : (
             <div className="p-6">
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-6 dark:border-slate-700 dark:bg-slate-900">
                 <div className="mb-4">
                   <div className="text-xs uppercase tracking-[0.25em] text-slate-500 dark:text-slate-400">
-                    {currentDate.toLocaleDateString("en-US", { weekday: "long" })}
+                    {currentDate.toLocaleDateString("en-US", {
+                      weekday: "long",
+                    })}
                   </div>
                   <h2 className="mt-2 text-5xl font-semibold text-slate-900 dark:text-white">
                     {currentDate.getDate()}
                   </h2>
                   <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                    {currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+                    {currentDate.toLocaleDateString("en-US", {
+                      month: "long",
+                      year: "numeric",
+                    })}
                   </p>
                 </div>
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -1158,182 +1928,107 @@ const getWeekEventSegments = (weekCells) => {
         onClose={closeComplianceModal}
         onFormChange={handleFormChange}
         onSubmit={handleSubmit}
+        users={users}
+        currentUserId={user?.id}
+        workgroups={workgroups}
+        departments={departments}
+        units={units}
         colorOptions={DEADLINE_COLOR_CLASSES}
         isEditMode={Boolean(editingItemId)}
-        title={editingItemId ? "Edit Compliance Deadline" : "Add Compliance Deadline"}
+        canModify={editingItemId ? canModify(selectedEvent) : true}
+        complianceFormTitles={complianceFormTitles}
+        title={
+          editingItemId ? "Edit Compliance Deadline" : "Add Compliance Deadline"
+        }
         submitLabel={editingItemId ? "Update compliance" : "Save compliance"}
       />
 
-      {dayListOpen && dayListDate ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-3 py-4 backdrop-blur-sm sm:px-4">
-          <div className="w-full max-w-2xl overflow-hidden rounded-lg border border-white/10 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.35)] dark:bg-slate-900">
-            <div className="bg-emerald-900 px-5 py-4 sm:px-6 sm:py-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.35em] text-emerald-50/90">List of Compliance</p>
-                  <h3 className="mt-1 text-lg font-semibold text-white">
-                    {dayListDate.toLocaleDateString("en-US", {
-                      month: "long",
-                      day: "2-digit",
-                      year: "numeric",
-                    })}
-                  </h3>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setDayListOpen(false)}
-                    className="rounded-full bg-white/15 p-2 transition hover:bg-white/25 text-white"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
+      <DayListModal
+        isOpen={dayListOpen}
+        date={dayListDate}
+        events={dayListEvents}
+        onClose={() => setDayListOpen(false)}
+        onEventClick={(item) => {
+          setDayListOpen(false);
+          openEventDetails(item);
+        }}
+        getColorClassForItem={getColorClassForItem}
+      />
+
+      {deleteModalOpen && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-3 py-4 backdrop-blur-sm sm:px-4"
+          onClick={closeDeleteConfirmModal}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md overflow-hidden rounded-lg border border-slate-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.25)] dark:border-slate-700 dark:bg-slate-950"
+          >
+            <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-6 py-4 dark:border-slate-700">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Delete deadline</h2>
               </div>
-            </div>
-            <div className="space-y-2 p-4 sm:p-5">
-              {dayListEvents.length ? (
-                dayListEvents.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => {
-                      setDayListOpen(false);
-                      openEventDetails(item);
-                    }}
-                    className={`w-full text-left rounded-md px-3 py-4 min-h-[60px] flex items-center ${getColorClassForItem(item)}`}
-                  >
-                    <div className="flex items-center justify-between w-full">
-                      <div className="truncate font-semibold">{item.title}</div>
-                      <div className="text-[11px] opacity-90">
-                        {new Date(item.startDate).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                      </div>
-                    </div>
-                  </button>
-                ))
-              ) : (
-                <div className="text-sm text-slate-500">No events</div>
-              )}
-            </div>
-            <div className="border-t border-slate-200 dark:border-slate-700 px-4 sm:px-6 py-3 sm:py-4 flex justify-end">
               <button
                 type="button"
-                onClick={() => setDayListOpen(false)}
-                className="rounded-md bg-gray-200 dark:bg-slate-700 text-gray-900 dark:text-white px-4 py-2 text-sm hover:bg-gray-300 dark:hover:bg-slate-600 transition"
+                onClick={closeDeleteConfirmModal}
+                className="rounded-full p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
               >
-                Close
+                ×
               </button>
             </div>
-          </div>
-        </div>
-      ) : null}
-
-      {isDetailsOpen && selectedEvent ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-3 py-4 backdrop-blur-sm sm:px-4">
-          <div className="w-full max-w-2xl overflow-hidden rounded-lg border border-white/10 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.35)] dark:bg-slate-900">
-            <div className="bg-emerald-900 px-5 py-5 text-white sm:px-6 sm:py-6">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.35em] text-emerald-50/90">
-                    Compliance details
-                  </p>
-                  <h2 className="mt-1 text-xl font-semibold sm:text-2xl">
-                    {selectedEvent.title}
-                  </h2>
-                  <p className="mt-2 text-sm text-emerald-50/90">
-                    {`${new Date(selectedEvent.startDate).toLocaleString("en-US", {
-                      weekday: "long",
-                      month: "long",
-                      day: "numeric",
-                      year: "numeric",
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })} –> ${new Date(selectedEvent.endDate).toLocaleString("en-US", {
-                      weekday: "long",
-                      month: "long",
-                      day: "numeric",
-                      year: "numeric",
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })}`}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={closeEventDetails}
-                    className="rounded-full bg-white/15 p-2 transition hover:bg-white/25 text-white"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
+            <div className="p-6 text-center">
+              <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-lg bg-rose-100 text-rose-700 dark:bg-rose-900 dark:text-rose-200">
+                <X className="h-6 w-6" />
               </div>
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                To confirm deletion of <span className="font-semibold">{selectedEvent?.title || "this deadline"}</span>, type <span className="font-semibold">delete</span> in the box below.
+              </p>
+              <input
+                type="text"
+                value={deleteConfirmation}
+                onChange={(e) => setDeleteConfirmation(e.target.value)}
+                className="mt-5 w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-rose-500 focus:ring-2 focus:ring-rose-200 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:border-rose-500 dark:focus:ring-rose-500/20"
+                placeholder="Type delete here"
+              />
             </div>
-
-            <div className="space-y-4 p-5 sm:p-6 dark:bg-slate-950">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                   <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">
-                    Type
-                  </p>
-                  <p className="mt-2 rounded-md border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
-                    {selectedEvent.complianceType}
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">
-                    Status
-                  </p>
-                  <p className="mt-2 rounded-md border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
-                    {selectedEvent.status}
-                  </p>
-                </div>
-
-                <div className="md:col-span-2">
-                  <p className="text-sm font-semibold text-slate-600 dark:text-slate-400">
-                    Assigned
-                  </p>
-                  <p className="mt-2 rounded-md border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
-                    {selectedEvent.assigned || "Unassigned"}
-                  </p>
-                </div>
-              </div>
-
-              <div>
-                <p className="text-sm font-semibold   text-slate-500 dark:text-slate-400">
-                  Description
-                </p>
-                <p className="mt-2 rounded-md border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100">
-                  {selectedEvent.description || "No description provided."}
-                </p>
-              </div>
-            </div>
-            <div className="border-t border-slate-200 dark:border-slate-700 px-4 sm:px-6 py-3 sm:py-4 flex flex-wrap justify-end gap-2">
+            <div className="flex flex-col gap-3 border-t border-slate-200 px-6 py-4 dark:border-slate-700 sm:flex-row sm:justify-end">
               <button
                 type="button"
-                onClick={() => openEditComplianceModal(selectedEvent)}
-                className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                onClick={closeDeleteConfirmModal}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
               >
-                Edit
+                Cancel
               </button>
               <button
                 type="button"
                 onClick={handleDeleteCompliance}
-                className="rounded-md bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700"
+                disabled={deleteConfirmation.trim().toLowerCase() !== "delete"}
+                className="inline-flex items-center justify-center rounded-lg bg-rose-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Delete
-              </button>
-              <button
-                type="button"
-                onClick={closeEventDetails}
-                className="rounded-md bg-gray-200 dark:bg-slate-700 text-gray-900 dark:text-white px-4 py-2 text-sm hover:bg-gray-300 dark:hover:bg-slate-600 transition"
-              >
-                Close
+                Delete deadline
               </button>
             </div>
           </div>
         </div>
-      ) : null}
+      )}
+
+      <EventDetailsModal
+        isOpen={isDetailsOpen}
+        event={selectedEvent}
+        onClose={closeEventDetails}
+        canModify={canModify}
+        onEdit={openEditComplianceModal}
+        onDelete={openDeleteConfirmModal}
+        getCreatorLabel={getCreatorLabel}
+        getAssignmentPreview={getAssignmentPreview}
+        getAssignedItems={getAssignedItems}
+        assignedDropdownOpen={assignedDropdownOpen}
+        setAssignedDropdownOpen={setAssignedDropdownOpen}
+        assignedDetailsRef={assignedDetailsRef}
+        complianceTypeLabel={getEventComplianceTypeLabel(selectedEvent)}
+        submissionForLabel={getEventSubmissionForLabel(selectedEvent)}
+        specificSubmissionLabel={getEventSpecificSubmissionLabel(selectedEvent)}
+      />
     </div>
   );
 };

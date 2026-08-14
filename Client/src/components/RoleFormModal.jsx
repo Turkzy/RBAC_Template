@@ -87,23 +87,23 @@ const RoleFormModal = ({ mode, role, onClose, onSuccess }) => {
             {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
           </div>
 
-          <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg"
-            >
-              {submitting && <Loader2 size={15} className="animate-spin" />}
-              {isEdit ? "Save Changes" : "Create Role"}
-            </button>
-          </div>
+          <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 pt-2">
+  <button
+    type="button"
+    onClick={onClose}
+    className="w-full sm:w-auto px-4 py-2.5 sm:py-2 text-sm font-medium text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+  >
+    Cancel
+  </button>
+  <button
+    type="submit"
+    disabled={submitting}
+    className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg"
+  >
+    {submitting && <Loader2 size={15} className="animate-spin" />}
+    {isEdit ? "Save Changes" : "Create Role"}
+  </button>
+</div>
         </form>
       </div>
     </div>

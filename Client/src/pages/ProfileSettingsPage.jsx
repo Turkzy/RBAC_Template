@@ -6,7 +6,7 @@ const ProfileSettingsPage = () => {
   const { user, updateUser } = useAuth();
 
   return (
-    <div className="rounded-lg p-6 select-none">
+    <div className="rounded-lg select-none">
       <div className="mb-6">
         <p className="text-xs sm:text-sm font-semibold uppercase tracking-[0.35em] text-emerald-500">
           My Profile

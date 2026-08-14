@@ -184,24 +184,24 @@ const UserFormModal = ({ mode, user, roles, workgroups = [], units = [], departm
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-3 sm:p-4">
-      <div className="w-full max-w-sm sm:max-w-lg lg:max-w-2xl bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 max-h-[90vh] overflow-y-auto">
+      <div className="w-full max-w-sm sm:max-w-lg lg:max-w-2xl max-h-[90vh] flex flex-col bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 sm:px-5 py-3 sm:py-4 border-b border-slate-100 dark:border-slate-800">
-          <h2 className="text-base sm:text-lg font-semibold text-slate-700 dark:text-white">
+        <div className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 sm:py-4 border-b border-slate-100 dark:border-slate-800 shrink-0">
+          <h2 className="min-w-0 truncate text-base sm:text-lg font-semibold text-slate-700 dark:text-white">
             {isEdit ? "Edit User" : "Add New User"}
           </h2>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="shrink-0 p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
             <X size={18} className="text-slate-400" />
           </button>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="px-4 sm:px-5 py-3 sm:py-4 space-y-4">
+        <form onSubmit={handleSubmit} className="px-4 sm:px-5 py-3 sm:py-4 space-y-4 overflow-y-auto">
           {errors.form && (
-            <div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-lg">
+            <div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-lg break-words">
               {errors.form}
             </div>
           )}
@@ -220,12 +220,12 @@ const UserFormModal = ({ mode, user, roles, workgroups = [], units = [], departm
                     type="text"
                     value={formData.firstName}
                     onChange={handleChange("firstName")}
-                    className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors ${
+                    className={`w-full px-3 py-2.5 sm:py-2 border rounded-lg bg-white dark:bg-slate-800 text-base sm:text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors ${
                       errors.firstName ? "border-red-400" : "border-slate-200 dark:border-slate-700"
                     }`}
                     placeholder="Juan"
                   />
-                  {errors.firstName && <p className="text-xs text-red-500 mt-1">{errors.firstName}</p>}
+                  {errors.firstName && <p className="text-xs text-red-500 mt-1 break-words">{errors.firstName}</p>}
                 </div>
 
                 <div>
@@ -236,7 +236,7 @@ const UserFormModal = ({ mode, user, roles, workgroups = [], units = [], departm
                     type="text"
                     value={formData.middleName}
                     onChange={handleChange("middleName")}
-                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors"
+                    className="w-full px-3 py-2.5 sm:py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-base sm:text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors"
                     placeholder="Optional"
                   />
                 </div>
@@ -249,12 +249,12 @@ const UserFormModal = ({ mode, user, roles, workgroups = [], units = [], departm
                     type="text"
                     value={formData.lastName}
                     onChange={handleChange("lastName")}
-                    className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors ${
+                    className={`w-full px-3 py-2.5 sm:py-2 border rounded-lg bg-white dark:bg-slate-800 text-base sm:text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors ${
                       errors.lastName ? "border-red-400" : "border-slate-200 dark:border-slate-700"
                     }`}
                     placeholder="Dela Cruz"
                   />
-                  {errors.lastName && <p className="text-xs text-red-500 mt-1">{errors.lastName}</p>}
+                  {errors.lastName && <p className="text-xs text-red-500 mt-1 break-words">{errors.lastName}</p>}
                 </div>
 
                 <div className="sm:col-span-2">
@@ -265,7 +265,7 @@ const UserFormModal = ({ mode, user, roles, workgroups = [], units = [], departm
                     type="text"
                     value={formData.address}
                     onChange={handleChange("address")}
-                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors"
+                    className="w-full px-3 py-2.5 sm:py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-base sm:text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors"
                     placeholder="Optional"
                   />
                 </div>
@@ -278,7 +278,7 @@ const UserFormModal = ({ mode, user, roles, workgroups = [], units = [], departm
                     type="date"
                     value={formData.birthdate}
                     onChange={handleChange("birthdate")}
-                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors"
+                    className="w-full px-3 py-2.5 sm:py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-base sm:text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors"
                   />
                 </div>
               </div>
@@ -297,7 +297,7 @@ const UserFormModal = ({ mode, user, roles, workgroups = [], units = [], departm
                     <select
                       value={formData.workgroupId}
                       onChange={handleChange("workgroupId")}
-                      className="w-full appearance-none pr-9 px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors"
+                      className="w-full appearance-none pr-9 px-3 py-2.5 sm:py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-base sm:text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors truncate"
                     >
                       <option value="">Select a workgroup</option>
                       {workgroups.map((w) => (
@@ -318,7 +318,7 @@ const UserFormModal = ({ mode, user, roles, workgroups = [], units = [], departm
                     <select
                       value={formData.DepartmentId}
                       onChange={handleChange("DepartmentId")}
-                      className="w-full appearance-none pr-9 px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors"
+                      className="w-full appearance-none pr-9 px-3 py-2.5 sm:py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-base sm:text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors truncate"
                     >
                       <option value="">Select a department</option>
                       {departments.map((department) => (
@@ -339,7 +339,7 @@ const UserFormModal = ({ mode, user, roles, workgroups = [], units = [], departm
                     <select
                       value={formData.unitsId}
                       onChange={handleChange("unitsId")}
-                      className="w-full appearance-none pr-9 px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors"
+                      className="w-full appearance-none pr-9 px-3 py-2.5 sm:py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-base sm:text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors truncate"
                     >
                       <option value="">Select a unit</option>
                       {units.map((u) => (
@@ -360,7 +360,7 @@ const UserFormModal = ({ mode, user, roles, workgroups = [], units = [], departm
                     type="text"
                     value={formData.position}
                     onChange={handleChange("position")}
-                    className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors"
+                    className="w-full px-3 py-2.5 sm:py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-base sm:text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors"
                     placeholder="Optional"
                   />
                 </div>
@@ -371,26 +371,28 @@ const UserFormModal = ({ mode, user, roles, workgroups = [], units = [], departm
               <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-100 mb-4">
                 Assignment
               </h3>
-              <div className="relative">
+              <div>
                 <label className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1">
                   Role
                 </label>
-                <select
-                  value={formData.roleId}
-                  onChange={handleChange("roleId")}
-                  className={`w-full appearance-none pr-9 px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors ${
-                    errors.roleId ? "border-red-400" : "border-slate-200 dark:border-slate-700"
-                  }`}
-                >
-                  <option value="">Select a role</option>
-                  {roles.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name}
-                    </option>
-                  ))}
-                </select>
-                    <ChevronDown className="pointer-events-none absolute right-3 top-11 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                {errors.roleId && <p className="text-xs text-red-500 mt-1">{errors.roleId}</p>}
+                <div className="relative">
+                  <select
+                    value={formData.roleId}
+                    onChange={handleChange("roleId")}
+                    className={`w-full appearance-none pr-9 px-3 py-2.5 sm:py-2 border rounded-lg bg-white dark:bg-slate-800 text-base sm:text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors truncate ${
+                      errors.roleId ? "border-red-400" : "border-slate-200 dark:border-slate-700"
+                    }`}
+                  >
+                    <option value="">Select a role</option>
+                    {roles.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                </div>
+                {errors.roleId && <p className="text-xs text-red-500 mt-1 break-words">{errors.roleId}</p>}
               </div>
             </div>
 
@@ -407,12 +409,12 @@ const UserFormModal = ({ mode, user, roles, workgroups = [], units = [], departm
                     type="email"
                     value={formData.email}
                     onChange={handleChange("email")}
-                    className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors ${
+                    className={`w-full px-3 py-2.5 sm:py-2 border rounded-lg bg-white dark:bg-slate-800 text-base sm:text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors ${
                       errors.email ? "border-red-400" : "border-slate-200 dark:border-slate-700"
                     }`}
                     placeholder="user@ndc.gov.ph"
                   />
-                  {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
+                  {errors.email && <p className="text-xs text-red-500 mt-1 break-words">{errors.email}</p>}
                 </div>
 
                 <div>
@@ -424,12 +426,12 @@ const UserFormModal = ({ mode, user, roles, workgroups = [], units = [], departm
                     autoComplete="username"
                     value={formData.username}
                     onChange={handleChange("username")}
-                    className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors ${
+                    className={`w-full px-3 py-2.5 sm:py-2 border rounded-lg bg-white dark:bg-slate-800 text-base sm:text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors ${
                       errors.username ? "border-red-400" : "border-slate-200 dark:border-slate-700"
                     }`}
                     placeholder="jdelacruz"
                   />
-                  {errors.username && <p className="text-xs text-red-500 mt-1">{errors.username}</p>}
+                  {errors.username && <p className="text-xs text-red-500 mt-1 break-words">{errors.username}</p>}
                 </div>
 
                 <div className="sm:col-span-2">
@@ -442,12 +444,12 @@ const UserFormModal = ({ mode, user, roles, workgroups = [], units = [], departm
                     value={formData.password}
                     onChange={handleChange("password")}
                     onBlur={handleNewPasswordBlur}
-                    className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors ${
+                    className={`w-full px-3 py-2.5 sm:py-2 border rounded-lg bg-white dark:bg-slate-800 text-base sm:text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors ${
                       errors.password ? "border-red-400" : "border-slate-200 dark:border-slate-700"
                     }`}
                     placeholder={isEdit ? "Leave blank to keep current password" : "At least 8 characters"}
                   />
-                  {errors.password && <p className="text-xs text-red-500 mt-1">{errors.password}</p>}
+                  {errors.password && <p className="text-xs text-red-500 mt-1 break-words">{errors.password}</p>}
                   {showPasswordValidation &&
                     getPasswordValidationStatus(formData.password).some((rule) => !rule.valid) && (
                       <div className="mt-3 rounded-2xl border border-red-200 bg-red-50 p-4 dark:border-red-900/50 dark:bg-red-950/10">
@@ -456,8 +458,8 @@ const UserFormModal = ({ mode, user, roles, workgroups = [], units = [], departm
                             .filter((rule) => !rule.valid)
                             .map((rule) => (
                               <div key={rule.key} className="flex items-start gap-2">
-                                <span className="mt-1 h-4 w-4 text-red-500">•</span>
-                                <p className="text-red-600 dark:text-red-400">{rule.label}</p>
+                                <span className="mt-1 h-4 w-4 shrink-0 text-red-500">•</span>
+                                <p className="text-red-600 dark:text-red-400 break-words">{rule.label}</p>
                               </div>
                             ))}
                         </div>
@@ -474,13 +476,13 @@ const UserFormModal = ({ mode, user, roles, workgroups = [], units = [], departm
                     autoComplete="new-password"
                     value={formData.confirmPassword}
                     onChange={handleChange("confirmPassword")}
-                    className={`w-full px-3 py-2 border rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors ${
+                    className={`w-full px-3 py-2.5 sm:py-2 border rounded-lg bg-white dark:bg-slate-800 text-base sm:text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors ${
                       errors.confirmPassword ? "border-red-400" : "border-slate-200 dark:border-slate-700"
                     }`}
                     placeholder="Re-enter password"
                   />
                   {errors.confirmPassword && (
-                    <p className="text-xs text-red-500 mt-1">{errors.confirmPassword}</p>
+                    <p className="text-xs text-red-500 mt-1 break-words">{errors.confirmPassword}</p>
                   )}
                 </div>
               </div>
@@ -488,18 +490,18 @@ const UserFormModal = ({ mode, user, roles, workgroups = [], units = [], departm
           </div>
 
           {/* Footer */}
-          <div className="flex flex-col sm:flex-row justify-end gap-2 sm:gap-3 pt-2">
+          <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+              className="w-full sm:w-auto px-4 py-2.5 sm:py-2 text-sm font-medium text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition shadow-sm"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white text-sm font-medium rounded-lg transition shadow-sm"
             >
               {submitting && <Loader2 size={15} className="animate-spin" />}
               {isEdit ? "Save Changes" : "Create User"}

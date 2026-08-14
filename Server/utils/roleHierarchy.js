@@ -42,5 +42,13 @@ export const canAssignRole = (actorRoleName, targetRoleName) => {
 
   if (!actorLevel || !targetLevel) return false;
 
-  return actorLevel >= targetLevel;
+  const actorIsSuperAdmin = String(actorRoleName).trim().toLowerCase().includes("super");
+
+  // Super Admin can assign any role except a higher-ranked role than themselves.
+  if (actorIsSuperAdmin) {
+    return actorLevel >= targetLevel;
+  }
+
+  // Other roles can only assign lower-ranked roles.
+  return actorLevel > targetLevel;
 };

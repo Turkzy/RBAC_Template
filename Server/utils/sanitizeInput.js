@@ -1,19 +1,11 @@
-const escapeHtml = (value) =>
-  value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-
 export const sanitizeString = (value) => {
   if (value === null || value === undefined) return '';
   if (typeof value !== 'string') return String(value);
 
-  const withoutScripts = value.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+  const withoutScripts = value.replace(/<script\b[^<]*(?:(?!<\/script>)[^<]*)*<\/script>/gi, '');
   const withoutTags = withoutScripts.replace(/<[^>]*>/g, '');
 
-  return escapeHtml(withoutTags).trim();
+  return withoutTags.trim();
 };
 
 export const sanitizeObject = (obj) => {

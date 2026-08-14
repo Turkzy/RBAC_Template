@@ -2,6 +2,29 @@ import { ActivityLog, User, Role, Permission } from "../models/index.js";
 import { Op } from "sequelize";
 import { canManageActivityLogs, canViewActivityLogs, getUserAccessScope } from "../utils/accessControl.js";
 
+const getAccessibleUserIds = async (requester) => {
+  const scope = getUserAccessScope(requester);
+  if (!scope) return null;
+
+  if (scope.DepartmentId !== undefined) {
+    const scopedUsers = await User.findAll({
+      where: { DepartmentId: scope.DepartmentId },
+      attributes: ["id"],
+    });
+    return scopedUsers.map((user) => user.id);
+  }
+
+  if (scope.workgroupId !== undefined) {
+    const scopedUsers = await User.findAll({
+      where: { workgroupId: scope.workgroupId },
+      attributes: ["id"],
+    });
+    return scopedUsers.map((user) => user.id);
+  }
+
+  return [requester.id];
+};
+
 export const listActivityLogs = async (req, res) => {
   try {
     const requester = await User.findByPk(req.user?.userId, {
@@ -25,28 +48,32 @@ export const listActivityLogs = async (req, res) => {
     const offset = (page - 1) * limit;
 
     const where = {};
-    const scope = getUserAccessScope(requester);
-    if (scope && scope.DepartmentId !== undefined) {
-      where.userId = { [Op.in]: [] };
+    const accessibleUserIds = await getAccessibleUserIds(requester);
+    const requestedUserId = req.query.userId ? Number(req.query.userId) : null;
+
+    if (accessibleUserIds === null) {
+      // Super admin can view all logs.
+    } else if (requestedUserId !== null && !accessibleUserIds.includes(requestedUserId)) {
+      return res.status(403).json({ error: true, message: "Forbidden: Access denied" });
+    } else if (requestedUserId !== null) {
+      where.userId = requestedUserId;
+    } else {
+      where.userId = { [Op.in]: accessibleUserIds };
     }
-    if (req.query.userId) where.userId = req.query.userId;
+
     if (req.query.action) where.action = req.query.action;
     // text search on description (e.g., q=Deactivated)
     if (req.query.q) {
-      where.description = { [Op.like]: `%${req.query.q}%` };
+      const query = `%${req.query.q}%`;
+      where[Op.or] = [
+        { description: { [Op.like]: query } },
+        { action: { [Op.like]: query } },
+      ];
     }
     if (req.query.from || req.query.to) {
       where.createdAt = {};
       if (req.query.from) where.createdAt[Op.gte] = new Date(req.query.from);
       if (req.query.to) where.createdAt[Op.lte] = new Date(req.query.to);
-    }
-
-    if (scope && scope.DepartmentId !== undefined) {
-      const scopedUsers = await User.findAll({
-        where: { DepartmentId: scope.DepartmentId },
-        attributes: ["id"],
-      });
-      where.userId = { [Op.in]: scopedUsers.map((user) => user.id) };
     }
 
     const { rows, count } = await ActivityLog.findAndCountAll({
@@ -88,16 +115,9 @@ export const getActivityLog = async (req, res) => {
     });
     if (!log) return res.status(404).json({ error: true, message: "Activity log not found" });
 
-    const scope = getUserAccessScope(requester);
-    if (scope && scope.DepartmentId !== undefined) {
-      const scopedUsers = await User.findAll({
-        where: { DepartmentId: scope.DepartmentId },
-        attributes: ["id"],
-      });
-      const scopedUserIds = scopedUsers.map((user) => user.id);
-      if (!scopedUserIds.includes(log.userId)) {
-        return res.status(403).json({ error: true, message: "Forbidden: Access denied" });
-      }
+    const accessibleUserIds = await getAccessibleUserIds(requester);
+    if (accessibleUserIds !== null && !accessibleUserIds.includes(log.userId)) {
+      return res.status(403).json({ error: true, message: "Forbidden: Access denied" });
     }
 
     return res.status(200).json({ error: false, log });

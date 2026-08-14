@@ -22,11 +22,13 @@ const PERMISSION_SEED = [
   { name: PERMISSIONS.PERMISSIONS_ASSIGN, label: "Assign Permissions" },
 
   // Audit & System Permissions
+  { name: PERMISSIONS.CALENDAR_VIEW_ALL, label: "View All Calendar Deadlines" },
   { name: PERMISSIONS.AUDIT_LOGS_VIEW, label: "View Audit Logs" },
   { name: PERMISSIONS.AUDIT_LOGS_MANAGE, label: "Manage Audit Logs" },
   { name: PERMISSIONS.DOCUMENTS_MANAGE, label: "Manage Documents" },
   { name: PERMISSIONS.SYSTEM_SETTINGS_MANAGE, label: "Manage System Settings" },
   { name: PERMISSIONS.NOTIFICATIONS_VIEW, label: "View Notifications" },
+  { name: PERMISSIONS.NOTIFICATIONS_RULES_MANAGE, label: "Manage Notification Rules" },
 ];
 
 export const seedPermissions = async () => {

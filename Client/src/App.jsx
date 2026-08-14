@@ -6,7 +6,8 @@ import Dashboard from "./components/Dashboard.jsx";
 import Logout from "./pages/Logout.jsx";
 
 import DashboardPage from "./pages/DashboardPage.jsx";
-import CompliancePage from "./pages/CompliancePage.jsx";
+import ComplianceManage from "./pages/ComplianceManage.jsx";
+import ComplianceStatus from "./pages/ComplianceStatus.jsx";
 import CalendarPage from "./pages/CalendarPage.jsx";
 import DocumentManagementPage from "./pages/DocumentManagementPage.jsx";
 import NotificationPage from "./pages/NotificationPage.jsx";
@@ -17,8 +18,12 @@ import ProfileSettingsPage from "./pages/ProfileSettingsPage.jsx";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import SettingsPage from "./pages/SystemSettingsPage.jsx";
+import NotificationRules from "./pages/NotificationRules.jsx";
+import OrganizationPage from "./pages/Organization.jsx";
+import SubmittedDocuments from "./pages/SubmittedDocuments.jsx";
 
 import { PERMISSIONS } from "./utils/permissions.js";
+import RecordsPage from "./pages/RecordsPage.jsx";
 
 const Spinner = () => (
   <div className="flex items-center justify-center min-h-screen">
@@ -40,7 +45,7 @@ const PublicOnlyRoute = ({ element }) => {
   return element;
 };
 
-const PermissionRoute = ({ element, permission }) => {
+const PermissionRoute = ({ element, permission, permissions }) => {
   const { authStatus, hasPermission, user } = useAuth();
   if (authStatus === "checking") return <Spinner />;
   if (authStatus === "unauthorized") return <Navigate to="/login" replace />;
@@ -48,7 +53,14 @@ const PermissionRoute = ({ element, permission }) => {
   const roleName = (user?.role || "").toString().trim().toLowerCase();
   const isSuperAdmin = roleName === "super admin" || roleName.includes("super");
 
-  if (!hasPermission(permission) && !isSuperAdmin) return <Navigate to="/" replace />;
+  const requiredPermissions = Array.isArray(permissions)
+    ? permissions
+    : permission
+      ? [permission]
+      : [];
+
+  const hasAccess = requiredPermissions.some((perm) => hasPermission(perm));
+  if (!hasAccess && !isSuperAdmin) return <Navigate to="/" replace />;
   return element;
 };
 
@@ -60,7 +72,7 @@ const PermissionRouteMultiple = ({ element, permissions }) => {
   const roleName = (user?.role || "").toString().trim().toLowerCase();
   const isSuperAdmin = roleName === "super admin" || roleName.includes("super");
 
-  const hasAnyPermission = permissions.some((perm) => hasPermission(perm));
+  const hasAnyPermission = (permissions || []).some((perm) => hasPermission(perm));
   if (!hasAnyPermission && !isSuperAdmin) return <Navigate to="/" replace />;
   return element;
 };
@@ -76,8 +88,17 @@ const AppContent = () => {
 
       {/* Protected layout — all app pages live here */}
       <Route path="/" element={<ProtectedRoute element={<Dashboard />} />}>
-        <Route index element={<DashboardPage />} />
-        <Route path="compliance" element={<CompliancePage />} />
+        <Route index element={<DashboardPage />} />       
+        <Route
+          path="compliance/manage"
+          element={
+            <PermissionRoute
+              permission={PERMISSIONS.COMPLIANCE_MANAGE}
+              element={<ComplianceManage />}
+            />
+          }
+        />
+        <Route path="compliance/status" element={<ComplianceStatus />} />
         <Route path="calendar" element={<CalendarPage />} />
         <Route
           path="documentmanagement"
@@ -85,6 +106,15 @@ const AppContent = () => {
             <PermissionRoute
               permission={PERMISSIONS.DOCUMENTS_MANAGE}
               element={<DocumentManagementPage />}
+            />
+          }
+        />
+        <Route
+          path="submitted-documents"
+          element={
+            <PermissionRoute
+              permission={PERMISSIONS.SUBMIT_DOCUMENTS}
+              element={<SubmittedDocuments />}
             />
           }
         />
@@ -97,6 +127,15 @@ const AppContent = () => {
               element={<ActivityLogsPage />}
             />
           }
+        />
+        <Route 
+        path="audit/records"
+        element={
+          <PermissionRoute
+          permission={PERMISSIONS.RECORDS}
+          element={<RecordsPage />}
+          />
+        }
         />
         <Route
           path="admin/access-settings"
@@ -122,6 +161,24 @@ const AppContent = () => {
             <PermissionRoute
               permission={PERMISSIONS.SYSTEM_SETTINGS_MANAGE}
               element={<SettingsPage />}
+            />
+          }
+        />
+        <Route
+          path="admin/notification-rules"
+          element={
+            <PermissionRoute
+              permission={PERMISSIONS.NOTIFICATIONS_RULES_MANAGE}
+              element={<NotificationRules />}
+            />
+          }
+        />
+        <Route
+          path="admin/organization"
+          element={
+            <PermissionRoute
+              permission={PERMISSIONS.ORGANIZATION_MANAGE}
+              element={<OrganizationPage />}
             />
           }
         />

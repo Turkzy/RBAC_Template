@@ -7,6 +7,7 @@ import {
   buildAssignDescription,
   buildRemoveDescription,
 } from "../utils/activityLogMessage.js";
+import { canAssignRole } from "../utils/roleHierarchy.js";
 
 //---------------ASSIGNING PERMISSIONS FOR ROLES PER UNITS---------------
 
@@ -308,9 +309,17 @@ export const assignRoleToUser = async (req, res) => {
       include: [{ model: Role, as: "role" }],
     });
     const role = await Role.findByPk(roleId);
+    const requester = await User.findByPk(req.user?.userId, {
+      include: [{ model: Role, as: "role" }],
+    });
 
     if (!user) return res.status(404).json({ error: true, message: "User not found" });
     if (!role) return res.status(404).json({ error: true, message: "Role not found" });
+    if (!requester?.role) return res.status(403).json({ error: true, message: "Forbidden: No role assigned" });
+
+    if (!canAssignRole(requester.role?.name, role.name)) {
+      return res.status(403).json({ error: true, message: "You are not authorized to assign this role" });
+    }
 
     const previousRoleName = user.role?.name || null;
     const newRoleName = role.name;
@@ -328,14 +337,15 @@ export const assignRoleToUser = async (req, res) => {
 
     await recordActivity(
       req,
-      "update",
-      buildUpdateDescription("user", changeDetails, {
-        target: user.email || user.username || user.id,
-      }),
+      "assign_role",
+      buildAssignDescription("role", newRoleName, "user", user.email || user.username || user.id),
       {
         entity: "user",
         updatedUserId: user.id,
         updaterId: req.user?.userId,
+        roleId: role.id,
+        previousRoleName,
+        newRoleName,
         changes: changeDetails,
       }
     );

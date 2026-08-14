@@ -49,14 +49,14 @@ const PermissionChecklist = ({ permissions, selectedIds, onToggle }) => {
         const allSelected = items.every((permission) => selectedIds.includes(permission.id));
         return (
           <div key={groupKey} className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 p-3">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <p className="min-w-0 truncate text-xs font-semibold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">
                 {label}
               </p>
               <button
                 type="button"
                 onClick={() => toggleGroup(items)}
-                className="text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:underline"
+                className="shrink-0 text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:underline"
               >
                 {allSelected ? "Clear All" : "Select All"}
               </button>
@@ -78,7 +78,7 @@ const PermissionChecklist = ({ permissions, selectedIds, onToggle }) => {
                         type="checkbox"
                         checked={checked}
                         onChange={() => onToggle(permission.id)}
-                        className="accent-emerald-500 w-4 h-4"
+                        className="accent-emerald-500 w-4 h-4 shrink-0"
                       />
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">
@@ -90,7 +90,7 @@ const PermissionChecklist = ({ permissions, selectedIds, onToggle }) => {
                       </div>
                     </div>
                     {checked ? (
-                      <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                      <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap shrink-0">
                         Selected
                       </span>
                     ) : null}
@@ -124,13 +124,13 @@ const AssignPermissionModal = ({
           className="w-full max-w-sm sm:max-w-2xl lg:max-w-5xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 pointer-events-auto max-h-[90vh] overflow-y-auto"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-900">
-            <h3 className="font-semibold text-sm sm:text-base text-slate-800 dark:text-white">
+          <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-100 dark:border-slate-800 sticky top-0 bg-white dark:bg-slate-900">
+            <h3 className="min-w-0 truncate font-semibold text-sm sm:text-base text-slate-800 dark:text-white">
               Assign Permissions — {role.name}
             </h3>
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="shrink-0 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             >
               <X size={16} className="text-slate-500" />
             </button>
@@ -149,18 +149,18 @@ const AssignPermissionModal = ({
             </div>
           </div>
 
-          <div className="px-4 sm:px-6 pb-3 sm:pb-5 flex flex-col sm:flex-row gap-2 sm:gap-3 sm:justify-end sticky bottom-0 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
+          <div className="px-4 sm:px-6 pb-3 sm:pb-5 pt-3 flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 sm:justify-end sticky bottom-0 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
             <button
               onClick={onClose}
               disabled={submitting}
-              className="px-4 py-2 text-sm rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-60 transition-colors"
+              className="w-full sm:w-auto px-4 py-2.5 sm:py-2 text-sm rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-60 transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={onSubmit}
               disabled={submitting}
-              className="flex items-center justify-center gap-2 px-4 py-2 text-sm rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-medium transition-colors"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 text-sm rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-medium transition-colors"
             >
               {submitting ? (
                 <Loader2 size={14} className="animate-spin" />

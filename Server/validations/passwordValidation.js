@@ -50,9 +50,14 @@ export const handleValidationErrors = (req, res, next) => {
 export const optionalPasswordValidationRules = [
     body('password')
 
-    .optional()
+    .optional({ nullable: true })
     .custom((value) => {
-        if (value === undefined || value === null || value === "") return true;
+        if (value === undefined || value === null) return true;
+
+        if (typeof value !== "string" || value.trim() === "") {
+            throw new Error("Password cannot be empty");
+        }
+
         if (!isStrongPassword(value)) {
             throw new Error('Password must be at least 8 characters long and include an uppercase letter, lowercase letter, number, and special character');
         }
